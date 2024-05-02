@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gorilla/websocket"
 	"github.com/retinotopic/go-bet/internal/player"
 	"github.com/retinotopic/pokerGO/pkg/randfuncs"
 )
@@ -24,6 +23,7 @@ type Lobby struct {
 	AdminOnce sync.Once
 	PlayerCh  chan player.Player
 	StartGame chan struct{}
+	isRating  bool
 }
 
 func (l *Lobby) LobbyWork() {
@@ -40,18 +40,21 @@ func (l *Lobby) LobbyWork() {
 	}
 }
 
-func (l *Lobby) Connhandle(plr *player.Player, conn *websocket.Conn) {
+func (l *Lobby) ConnHandle(plr *player.Player) {
 	fmt.Println("im in2")
 	l.AdminOnce.Do(func() {
-		l.Admin = plr
-		plr.Admin = true
+		if l.isRating {
+			go l.tickerTillGame()
+		} else {
+			l.Admin = plr
+			plr.Admin = true
+		}
 	})
 
 	defer func() {
 		fmt.Println("rip connection")
 
 	}()
-	plr.Conn = conn
 	for _, v := range l.Players { // load current state of the game
 		vs := *v
 		if vs != *plr {
@@ -74,6 +77,17 @@ func (l *Lobby) Connhandle(plr *player.Player, conn *websocket.Conn) {
 		l.PlayerCh <- *plr
 	}
 }
+func (l *Lobby) tickerTillGame() {
+	ticker := time.NewTicker(time.Second * 1)
+	i := 0
+	for range ticker.C {
+		if i >= 15 {
+			l.StartGame <- struct{}{}
+			return
+		}
+		i++
+	}
+}
 func (l *Lobby) Game() {
 	plorder := []player.Player{}
 	for i, v := range l.Players {
@@ -83,7 +97,7 @@ func (l *Lobby) Game() {
 	timer := time.NewTicker(time.Second * 1)
 	PlayerBroadcast := make(chan player.Player)
 	timevalue := 0
-	k := randfuncs.NewSource().Intn(len(l.Occupied))
+	k := randfuncs.NewSource().Intn(len(plorder))
 	for {
 		select {
 		case pb := <-PlayerBroadcast: // broadcoasting one to everyone

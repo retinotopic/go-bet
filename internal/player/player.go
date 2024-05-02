@@ -12,7 +12,8 @@ func NewPlayer() *Player {
 
 type Player struct {
 	Name     string `json:"Name"`
-	Bankroll int    `json:"Stack"`
+	Bankroll int    `json:"Bankroll"`
+	Bet      int    `json:"Bet"`
 	Conn     *websocket.Conn
 	Place    int       `json:"Place"`
 	Admin    bool      `json:"IsAdmin"`
