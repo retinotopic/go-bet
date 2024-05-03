@@ -1,7 +1,7 @@
 package player
 
 import (
-	"github.com/retinotopic/pokerGO/pkg/deck"
+	"github.com/retinotopic/go-bet/pkg/deck"
 
 	"github.com/gorilla/websocket"
 )
@@ -13,16 +13,15 @@ func NewPlayer() *Player {
 type Player struct {
 	Name     string `json:"Name"`
 	Bankroll int    `json:"Bankroll"`
-	Bet      int    `json:"Bet"`
 	Conn     *websocket.Conn
-	Place    int       `json:"Place"`
-	Admin    bool      `json:"IsAdmin"`
-	Hand     deck.Card `json:"Hand,omitempty"`
-	ValueSec int       `json:"Time,omitempty"`
+	Place    int          `json:"Place"`
+	Admin    bool         `json:"IsAdmin"`
+	Hand     [2]deck.Card `json:"Hand,omitempty"`
+	ValueSec int          `json:"Time,omitempty"`
 }
 
 func (p Player) PrivateSend() Player {
-	p.Hand = deck.Card{}
+	p.Hand = [2]deck.Card{}
 	return p
 }
 func (p Player) SendTimeValue(time int) Player {

@@ -6,7 +6,8 @@ import (
 	"time"
 
 	"github.com/retinotopic/go-bet/internal/player"
-	"github.com/retinotopic/pokerGO/pkg/randfuncs"
+	"github.com/retinotopic/go-bet/pkg/deck"
+	"github.com/retinotopic/go-bet/pkg/randfuncs"
 )
 
 func NewLobby() *Lobby {
@@ -14,16 +15,24 @@ func NewLobby() *Lobby {
 	return l
 }
 
+type ControlJSON struct {
+	Bet      int          `json:"Bet"`
+	ValueSec int          `json:"Time,omitempty"`
+	Place    int          `json:"Place"`
+	Cards    [5]deck.Card `json:"Hand,omitempty"`
+}
+
 type Lobby struct {
 	Players  []*player.Player
 	Admin    *player.Player
 	Occupied map[int]bool
 	sync.Mutex
-	GameState int
-	AdminOnce sync.Once
-	PlayerCh  chan player.Player
-	StartGame chan struct{}
-	isRating  bool
+	Order           int
+	AdminOnce       sync.Once
+	PlayerCh        chan player.Player
+	StartGame       chan struct{}
+	PlayerBroadcast chan player.Player
+	isRating        bool
 }
 
 func (l *Lobby) LobbyWork() {
@@ -88,19 +97,27 @@ func (l *Lobby) tickerTillGame() {
 		i++
 	}
 }
+func (l *Lobby) tickerTillNextTurn() {
+	timer := time.NewTicker(time.Second * 1)
+	timevalue := 0
+	for range timer.C {
+		timevalue++
+		l.PlayerBroadcast <- l.Players[l.Order].SendTimeValue(timevalue)
+		if timevalue >= 30 {
+			timer.Stop()
+		}
+	}
+}
 func (l *Lobby) Game() {
-	plorder := []player.Player{}
 	for i, v := range l.Players {
-		plorder = append(plorder, *v)
 		v.Place = i
 	}
-	timer := time.NewTicker(time.Second * 1)
-	PlayerBroadcast := make(chan player.Player)
-	timevalue := 0
-	k := randfuncs.NewSource().Intn(len(plorder))
+	l.PlayerBroadcast = make(chan player.Player)
+	l.Order = randfuncs.NewSource().Intn(len(l.Players))
+	go l.tickerTillNextTurn()
 	for {
 		select {
-		case pb := <-PlayerBroadcast: // broadcoasting one to everyone
+		case pb := <-l.PlayerBroadcast: // broadcoasting one to everyone
 			for _, v := range l.Players {
 				if pb != *v {
 					pb = v.PrivateSend()
@@ -108,15 +125,10 @@ func (l *Lobby) Game() {
 				v.Conn.WriteJSON(pb)
 				fmt.Println(v, "checkerv1")
 			}
-		case <-timer.C:
-			timevalue++
-			PlayerBroadcast <- plorder[k].SendTimeValue(timevalue)
-			if timevalue >= 30 {
-				timer.Stop()
-			}
 		case pl := <-l.PlayerCh: // evaluating hand
-			if pl.Place == k {
+			if pl.Place == l.Order {
 				// evaluate hand
+				l.Order++
 			}
 			for _, v := range l.Players {
 				pls := pl
