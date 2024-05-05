@@ -6,26 +6,21 @@ import (
 	"time"
 
 	"github.com/retinotopic/go-bet/internal/player"
-	"github.com/retinotopic/go-bet/pkg/deck"
 	"github.com/retinotopic/go-bet/pkg/randfuncs"
 )
 
 func NewLobby() *Lobby {
-	l := &Lobby{Players: make([]*player.Player, 0), Occupied: make(map[int]bool), PlayerCh: make(chan player.Player), StartGame: make(chan struct{}, 1)}
+	l := &Lobby{Players: make([]player.Player, 0), Occupied: make(map[int]bool), PlayerCh: make(chan player.Player), StartGame: make(chan struct{}, 1)}
 	return l
 }
 
-type ControlJSON struct {
-	Bet      int          `json:"Bet"`
-	ValueSec int          `json:"Time,omitempty"`
-	Place    int          `json:"Place"`
-	Cards    [5]deck.Card `json:"Hand,omitempty"`
-}
-
 type Lobby struct {
-	Players  []*player.Player
-	Admin    *player.Player
-	Occupied map[int]bool
+	Players    []player.Player
+	Admin      player.Player
+	Board      player.Player
+	MaxBet     int
+	Occupied   map[int]bool
+	TurnTicker *time.Ticker
 	sync.Mutex
 	Order           int
 	AdminOnce       sync.Once
@@ -55,7 +50,7 @@ func (l *Lobby) ConnHandle(plr *player.Player) {
 		if l.isRating {
 			go l.tickerTillGame()
 		} else {
-			l.Admin = plr
+			l.Admin = *plr
 			plr.Admin = true
 		}
 	})
@@ -65,25 +60,26 @@ func (l *Lobby) ConnHandle(plr *player.Player) {
 
 	}()
 	for _, v := range l.Players { // load current state of the game
-		vs := *v
-		if vs != *plr {
-			vs = v.PrivateSend()
+		if v.Place != plr.Place {
+			v = v.PrivateSend()
 		}
-		err := plr.Conn.WriteJSON(vs)
+		err := plr.Conn.WriteJSON(v)
 		if err != nil {
 			fmt.Println(err, "WriteJSON start")
 		}
 		fmt.Println("start")
 	}
 	for {
-		player := player.Player{}
-		err := plr.Conn.ReadJSON(player)
+		ctrl := player.Player{}
+		err := plr.Conn.ReadJSON(&ctrl)
 		if err != nil {
 			fmt.Println(err, "conn read error")
 			plr.Conn = nil
 			break
 		}
+		plr.Bet = ctrl.Bet
 		l.PlayerCh <- *plr
+
 	}
 }
 func (l *Lobby) tickerTillGame() {
@@ -98,13 +94,14 @@ func (l *Lobby) tickerTillGame() {
 	}
 }
 func (l *Lobby) tickerTillNextTurn() {
-	timer := time.NewTicker(time.Second * 1)
+	l.TurnTicker = time.NewTicker(time.Second * 1)
 	timevalue := 0
-	for range timer.C {
+	for range l.TurnTicker.C {
 		timevalue++
 		l.PlayerBroadcast <- l.Players[l.Order].SendTimeValue(timevalue)
 		if timevalue >= 30 {
-			timer.Stop()
+			l.TurnTicker.Stop()
+			l.PlayerCh <- l.Players[l.Order]
 		}
 	}
 }
@@ -112,32 +109,35 @@ func (l *Lobby) Game() {
 	for i, v := range l.Players {
 		v.Place = i
 	}
+	l.Board = player.Player{}
 	l.PlayerBroadcast = make(chan player.Player)
-	l.Order = randfuncs.NewSource().Intn(len(l.Players))
+	button := randfuncs.NewSource().Intn(len(l.Players))
+	l.Order = button
 	go l.tickerTillNextTurn()
-	for {
-		select {
-		case pb := <-l.PlayerBroadcast: // broadcoasting one to everyone
-			for _, v := range l.Players {
-				if pb != *v {
-					pb = v.PrivateSend()
-				}
-				v.Conn.WriteJSON(pb)
-				fmt.Println(v, "checkerv1")
+	for pl := range l.PlayerCh { // evaluating hand
+		if pl.Place == l.Order {
+			l.TurnTicker.Stop()
+			if l.Order+1 == len(l.Players) {
+				l.Order = 0
 			}
-		case pl := <-l.PlayerCh: // evaluating hand
-			if pl.Place == l.Order {
-				// evaluate hand
-				l.Order++
+			if pl.Bet >= l.MaxBet {
+				l.Board = pl
+				l.MaxBet = pl.Bet
 			}
-			for _, v := range l.Players {
-				pls := pl
-				if pls != *v {
-					pls = v.PrivateSend()
-				}
-				v.Conn.WriteJSON(pls)
-				fmt.Println(v, "checkerv2")
+			l.Order++
+		}
+	}
+}
+
+// player broadcast method
+func (l *Lobby) Broadcast() {
+	for pb := range l.PlayerBroadcast {
+		for _, v := range l.Players {
+			if pb.Place != v.Place {
+				pb = v.PrivateSend()
 			}
+			v.Conn.WriteJSON(pb)
+			fmt.Println(v, "checkerv1")
 		}
 	}
 }

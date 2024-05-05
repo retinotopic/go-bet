@@ -6,23 +6,20 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-func NewPlayer() *Player {
-	return &Player{}
-}
-
 type Player struct {
 	Name     string `json:"Name"`
 	Bankroll int    `json:"Bankroll"`
+	Bet      int    `json:"Bet"`
+	IsFold   bool   `json:"IsFold"`
 	Conn     *websocket.Conn
-	Place    int          `json:"Place"`
-	Admin    bool         `json:"IsAdmin"`
-	Hand     [2]deck.Card `json:"Hand,omitempty"`
-	ValueSec int          `json:"Time,omitempty"`
+	Place    int         `json:"Place"`
+	Admin    bool        `json:"IsAdmin"`
+	Cards    []deck.Card `json:"Hand,omitempty"`
+	ValueSec int         `json:"Time,omitempty"`
 }
 
 func (p Player) PrivateSend() Player {
-	p.Hand = [2]deck.Card{}
-	return p
+	return Player{Cards: []deck.Card{}, Place: p.Place}
 }
 func (p Player) SendTimeValue(time int) Player {
 	return Player{ValueSec: time, Place: p.Place}

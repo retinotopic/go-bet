@@ -14,4 +14,4 @@ func RandomString(n int, r *rand.Rand) string {
 	}
 	return string(s)
 }
-func NewSource() *rand.Rand { return rand.New(rand.NewSource(time.Now().Unix())) }
+func NewSource() *rand.Rand { return rand.New(rand.NewSource(time.Now().UnixNano())) }
