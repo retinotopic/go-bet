@@ -7,15 +7,16 @@ import (
 )
 
 type Player struct {
-	Name     string `json:"Name"`
-	Bankroll int    `json:"Bankroll"`
-	Bet      int    `json:"Bet"`
-	IsFold   bool   `json:"IsFold"`
-	Conn     *websocket.Conn
-	Place    int         `json:"Place"`
-	Admin    bool        `json:"IsAdmin"`
-	Cards    []deck.Card `json:"Hand,omitempty"`
-	ValueSec int         `json:"Time,omitempty"`
+	Name       string `json:"Name"`
+	Bankroll   int    `json:"Bankroll"`
+	Bet        int    `json:"Bet"`
+	IsFold     bool   `json:"IsFold"`
+	Conn       *websocket.Conn
+	Place      int         `json:"Place"`
+	Admin      bool        `json:"IsAdmin"`
+	Cards      []deck.Card `json:"Hand,omitempty"`
+	ValueSec   int         `json:"Time,omitempty"`
+	NextPlayer *Player
 }
 
 func (p Player) PrivateSend() Player {

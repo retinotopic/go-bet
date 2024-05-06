@@ -77,7 +77,7 @@ func (l *Lobby) ConnHandle(plr *player.Player) {
 			plr.Conn = nil
 			break
 		}
-		plr.Bet = ctrl.Bet
+		plr.Bet = plr.Bet + ctrl.Bet
 		l.PlayerCh <- *plr
 
 	}
@@ -106,8 +106,14 @@ func (l *Lobby) tickerTillNextTurn() {
 	}
 }
 func (l *Lobby) Game() {
+
 	for i, v := range l.Players {
 		v.Place = i
+		if i+1 == len(l.Players) {
+			v.NextPlayer = &l.Players[0]
+		} else {
+			v.NextPlayer = &l.Players[i+1]
+		}
 	}
 	l.Board = player.Player{}
 	l.PlayerBroadcast = make(chan player.Player)
@@ -117,14 +123,18 @@ func (l *Lobby) Game() {
 	for pl := range l.PlayerCh { // evaluating hand
 		if pl.Place == l.Order {
 			l.TurnTicker.Stop()
-			if l.Order+1 == len(l.Players) {
-				l.Order = 0
-			}
-			if pl.Bet >= l.MaxBet {
-				l.Board = pl
+			if pl.Bet == l.MaxBet {
+				// evaluate hand
+			} else if pl.Bet > l.MaxBet {
 				l.MaxBet = pl.Bet
+			} else {
+				pl.IsFold = true
 			}
-			l.Order++
+			for pl.IsFold {
+				pl = *pl.NextPlayer
+			}
+			l.Order = pl.Place
+			go l.tickerTillNextTurn()
 		}
 	}
 }
