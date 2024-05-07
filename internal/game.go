@@ -5,28 +5,29 @@ import (
 	"sync"
 	"time"
 
+	"github.com/chehsunliu/poker"
 	"github.com/retinotopic/go-bet/internal/player"
 	"github.com/retinotopic/go-bet/pkg/randfuncs"
 )
 
 func NewLobby() *Lobby {
-	l := &Lobby{Players: make([]player.Player, 0), Occupied: make(map[int]bool), PlayerCh: make(chan player.Player), StartGame: make(chan struct{}, 1)}
+	l := &Lobby{Players: make([]player.PlayUnit, 0), Occupied: make(map[int]bool), PlayerCh: make(chan player.PlayUnit), StartGame: make(chan struct{}, 1)}
 	return l
 }
 
 type Lobby struct {
-	Players    []player.Player
-	Admin      player.Player
-	Board      player.Player
+	Players    []player.PlayUnit
+	Admin      player.PlayUnit
+	Board      player.PlayUnit
 	MaxBet     int
 	Occupied   map[int]bool
 	TurnTicker *time.Ticker
 	sync.Mutex
 	Order           int
 	AdminOnce       sync.Once
-	PlayerCh        chan player.Player
+	PlayerCh        chan player.PlayUnit
 	StartGame       chan struct{}
-	PlayerBroadcast chan player.Player
+	PlayerBroadcast chan player.PlayUnit
 	isRating        bool
 }
 
@@ -44,7 +45,7 @@ func (l *Lobby) LobbyWork() {
 	}
 }
 
-func (l *Lobby) ConnHandle(plr *player.Player) {
+func (l *Lobby) ConnHandle(plr *player.PlayUnit) {
 	fmt.Println("im in2")
 	l.AdminOnce.Do(func() {
 		if l.isRating {
@@ -70,7 +71,7 @@ func (l *Lobby) ConnHandle(plr *player.Player) {
 		fmt.Println("start")
 	}
 	for {
-		ctrl := player.Player{}
+		ctrl := player.PlayUnit{}
 		err := plr.Conn.ReadJSON(&ctrl)
 		if err != nil {
 			fmt.Println(err, "conn read error")
@@ -106,8 +107,11 @@ func (l *Lobby) tickerTillNextTurn() {
 	}
 }
 func (l *Lobby) Game() {
-
+	var flop bool
+	deck := poker.NewDeck()
+	deck.Shuffle()
 	for i, v := range l.Players {
+		v.Cards = deck.Draw(2)
 		v.Place = i
 		if i+1 == len(l.Players) {
 			v.NextPlayer = &l.Players[0]
@@ -115,23 +119,29 @@ func (l *Lobby) Game() {
 			v.NextPlayer = &l.Players[i+1]
 		}
 	}
-	l.Board = player.Player{}
-	l.PlayerBroadcast = make(chan player.Player)
+	l.Board = player.PlayUnit{}
+	l.PlayerBroadcast = make(chan player.PlayUnit)
 	button := randfuncs.NewSource().Intn(len(l.Players))
 	l.Order = button
 	go l.tickerTillNextTurn()
 	for pl := range l.PlayerCh { // evaluating hand
 		if pl.Place == l.Order {
 			l.TurnTicker.Stop()
-			if pl.Bet == l.MaxBet {
-				// evaluate hand
-			} else if pl.Bet > l.MaxBet {
+			if pl.Bet >= l.MaxBet {
 				l.MaxBet = pl.Bet
 			} else {
 				pl.IsFold = true
 			}
+			pl.HasActed = true
 			for pl.IsFold {
 				pl = *pl.NextPlayer
+			}
+			if pl.Bet == l.MaxBet && pl.HasActed {
+				if flop {
+					l.Board.Cards = append(l.Board.Cards, pl.Cards...)
+				} else {
+					l.Board.Cards = pl.Cards
+				}
 			}
 			l.Order = pl.Place
 			go l.tickerTillNextTurn()
