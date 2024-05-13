@@ -2,6 +2,7 @@ package hub
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -15,10 +16,22 @@ func NewLobby() *Lobby {
 	return l
 }
 
+const (
+	preflop = iota
+	flop
+	turn
+	river
+)
+
+type top struct {
+	place  int
+	rating int32
+}
 type Lobby struct {
 	Players    []player.PlayUnit
 	Admin      player.PlayUnit
 	Board      player.PlayUnit
+	SmallBlind int
 	MaxBet     int
 	Occupied   map[int]bool
 	TurnTicker *time.Ticker
@@ -57,7 +70,6 @@ func (l *Lobby) ConnHandle(plr *player.PlayUnit) {
 	})
 
 	defer func() {
-		fmt.Println("rip connection")
 
 	}()
 	for _, v := range l.Players { // load current state of the game
@@ -78,9 +90,10 @@ func (l *Lobby) ConnHandle(plr *player.PlayUnit) {
 			plr.Conn = nil
 			break
 		}
-		plr.Bet = plr.Bet + ctrl.Bet
-		l.PlayerCh <- *plr
-
+		if ctrl.Bet <= plr.Bankroll && ctrl.Bet >= 0 {
+			plr.Bet = plr.Bet + ctrl.Bet
+			l.PlayerCh <- *plr
+		}
 	}
 }
 func (l *Lobby) tickerTillGame() {
@@ -107,9 +120,11 @@ func (l *Lobby) tickerTillNextTurn() {
 	}
 }
 func (l *Lobby) Game() {
-	var flop bool
+	var stages int
 	deck := poker.NewDeck()
 	deck.Shuffle()
+	randfuncs.NewSource().Shuffle(len(l.Players), func(i, j int) { l.Players[i], l.Players[j] = l.Players[j], l.Players[i] })
+
 	for i, v := range l.Players {
 		v.Cards = deck.Draw(2)
 		v.Place = i
@@ -120,9 +135,12 @@ func (l *Lobby) Game() {
 		}
 	}
 	l.Board = player.PlayUnit{}
+	l.Board.Cards = make([]poker.Card, 0, 7)
 	l.PlayerBroadcast = make(chan player.PlayUnit)
-	button := randfuncs.NewSource().Intn(len(l.Players))
-	l.Order = button
+	l.Players[0].Bet = l.SmallBlind
+	l.Players[1].Bet = l.SmallBlind * 2
+	l.Order = l.Players[2].Place
+
 	go l.tickerTillNextTurn()
 	for pl := range l.PlayerCh { // evaluating hand
 		if pl.Place == l.Order {
@@ -137,13 +155,32 @@ func (l *Lobby) Game() {
 				pl = *pl.NextPlayer
 			}
 			if pl.Bet == l.MaxBet && pl.HasActed {
-				if flop {
-					l.Board.Cards = append(l.Board.Cards, pl.Cards...)
-				} else {
-					l.Board.Cards = pl.Cards
+				switch turn {
+				case preflop: // preflop to flop
+					flopcard := deck.Draw(3)
+					l.Board.Cards = append(l.Board.Cards, flopcard...)
+				case flop, turn: // flop to turn, turn to river
+					flopcard := deck.Draw(1)
+					l.Board.Cards = append(l.Board.Cards, flopcard[0])
+				case river:
+					var emptyCard poker.Card
+					topPlaces := make([]top, 0, 7)
+					l.Board.Cards = append(l.Board.Cards, emptyCard, emptyCard)
+					for _, v := range l.Players {
+						if !pl.IsFold {
+							l.Board.Cards[5] = v.Cards[0]
+							l.Board.Cards[6] = v.Cards[1]
+							eval := poker.Evaluate(l.Board.Cards)
+							topPlaces = append(topPlaces, top{rating: eval, place: v.Place})
+						}
+					}
+					sort.Slice(topPlaces, func(i, j int) bool {
+						return topPlaces[i].rating < topPlaces[j].rating
+					})
 				}
 			}
 			l.Order = pl.Place
+			stages++
 			go l.tickerTillNextTurn()
 		}
 	}
