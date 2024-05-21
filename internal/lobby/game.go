@@ -1,4 +1,4 @@
-package hub
+package lobby
 
 import (
 	"fmt"
@@ -11,8 +11,8 @@ import (
 	"github.com/retinotopic/go-bet/pkg/randfuncs"
 )
 
-func NewLobby() *Lobby {
-	l := &Lobby{Players: make([]player.PlayUnit, 0), Occupied: make(map[int]bool), PlayerCh: make(chan player.PlayUnit), StartGame: make(chan struct{}, 1)}
+func NewLobby(players []player.PlayUnit) *Lobby {
+	l := &Lobby{Players: players, PlayerCh: make(chan player.PlayUnit), StartGame: make(chan struct{}, 1)}
 	return l
 }
 
@@ -34,7 +34,6 @@ type Lobby struct {
 	Board      player.PlayUnit
 	SmallBlind int
 	MaxBet     int
-	Occupied   map[int]bool
 	TurnTicker *time.Ticker
 	sync.Mutex
 	Order           int
@@ -165,14 +164,11 @@ func (l *Lobby) Game() {
 						return topPlaces[i].rating > topPlaces[j].rating
 					})
 					i := 0
-					for i = range topPlaces {
-						if i > 0 && topPlaces[i].rating != topPlaces[i-1].rating {
-							break
-						}
+					for ; i == 0 || topPlaces[i].rating == topPlaces[i-1].rating; i++ {
 					}
 					share := l.Board.Bankroll / i
 					for pl := range i {
-						l.Players[topPlaces[i].place].Bankroll += share
+						l.Players[topPlaces[pl].place].Bankroll += share
 					}
 					newPlayers := make([]player.PlayUnit, 0, 8)
 					ch := make(chan bool, 1)

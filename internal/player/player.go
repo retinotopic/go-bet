@@ -6,6 +6,7 @@ import (
 )
 
 type PlayUnit struct {
+	User_id    int
 	Name       string `json:"Name"`
 	Bankroll   int    `json:"Bankroll"`
 	Bet        int    `json:"Bet"`
