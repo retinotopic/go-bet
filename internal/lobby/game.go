@@ -17,10 +17,10 @@ func NewLobby(players []player.PlayUnit) *Lobby {
 }
 
 const (
-	preflop = iota
-	flop
+	flop = iota
 	turn
 	river
+	postriver
 )
 
 type top struct {
@@ -70,7 +70,12 @@ func (l *Lobby) ConnHandle(plr *player.PlayUnit) {
 	})
 
 	defer func() {
-
+		if plr.Conn != nil {
+			err := plr.Conn.Close()
+			if err != nil {
+				fmt.Println(err, "error closing connection")
+			}
+		}
 	}()
 	for _, v := range l.Players { // load current state of the game
 		if v.Place != plr.Place {
@@ -87,7 +92,6 @@ func (l *Lobby) ConnHandle(plr *player.PlayUnit) {
 		err := plr.Conn.ReadJSON(&ctrl)
 		if err != nil {
 			fmt.Println(err, "conn read error")
-			plr.Conn = nil
 			break
 		}
 		if ctrl.Bet <= plr.Bankroll && ctrl.Bet >= 0 {
@@ -141,35 +145,14 @@ func (l *Lobby) Game() {
 			l.Order = pl.Place
 			if pl.Bet == l.MaxBet && pl.HasActed {
 				switch turn {
-				case preflop: // preflop to flop
+				case flop: // preflop to flop
 					flopcard := l.Deck.Draw(3)
 					l.Board.Cards = append(l.Board.Cards, flopcard...)
-				case flop, turn: // flop to turn, turn to river
+				case turn, river: // flop to turn, turn to river
 					flopcard := l.Deck.Draw(1)
 					l.Board.Cards = append(l.Board.Cards, flopcard[0])
-				case river:
-					var emptyCard poker.Card
-					topPlaces := make([]top, 0, 7)
-					l.Board.Cards = append(l.Board.Cards, emptyCard, emptyCard)
-					for i, v := range l.Players {
-						if !v.IsFold {
-							l.Board.Cards[5] = v.Cards[0]
-							l.Board.Cards[6] = v.Cards[1]
-							eval := poker.Evaluate(l.Board.Cards)
-							topPlaces = append(topPlaces, top{rating: eval, place: i})
-						}
-						v.IsFold = false
-					}
-					sort.Slice(topPlaces, func(i, j int) bool {
-						return topPlaces[i].rating > topPlaces[j].rating
-					})
-					i := 0
-					for ; i == 0 || topPlaces[i].rating == topPlaces[i-1].rating; i++ {
-					}
-					share := l.Board.Bankroll / i
-					for pl := range i {
-						l.Players[topPlaces[pl].place].Bankroll += share
-					}
+				case postriver:
+					l.CalcWinners()
 					newPlayers := make([]player.PlayUnit, 0, 8)
 					ch := make(chan bool, 1)
 					stages = -1
@@ -230,4 +213,29 @@ func (l *Lobby) DealNewHand() {
 	l.Players[0].NextPlayer.Bet = l.SmallBlind * 2
 	l.Order = l.Players[0].NextPlayer.NextPlayer.Place
 	//send all players to all players (broadcast)
+}
+
+func (l *Lobby) CalcWinners() {
+	var emptyCard poker.Card
+	topPlaces := make([]top, 0, 7)
+	l.Board.Cards = append(l.Board.Cards, emptyCard, emptyCard)
+	for i, v := range l.Players {
+		if !v.IsFold {
+			l.Board.Cards[5] = v.Cards[0]
+			l.Board.Cards[6] = v.Cards[1]
+			eval := poker.Evaluate(l.Board.Cards)
+			topPlaces = append(topPlaces, top{rating: eval, place: i})
+		}
+		v.IsFold = false
+	}
+	sort.Slice(topPlaces, func(i, j int) bool {
+		return topPlaces[i].rating > topPlaces[j].rating
+	})
+	i := 0
+	for ; i == 0 || topPlaces[i].rating == topPlaces[i-1].rating; i++ {
+	}
+	share := l.Board.Bankroll / i
+	for pl := range i {
+		l.Players[topPlaces[pl].place].Bankroll += share
+	}
 }
