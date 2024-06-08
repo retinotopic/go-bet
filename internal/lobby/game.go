@@ -11,7 +11,7 @@ import (
 	"github.com/retinotopic/go-bet/pkg/randfuncs"
 )
 
-func NewLobby(players []player.PlayUnit) *Lobby {
+func NewLobby(players []*player.PlayUnit) *Lobby {
 	l := &Lobby{Players: players, PlayerCh: make(chan player.PlayUnit), StartGame: make(chan struct{}, 1)}
 	return l
 }
@@ -29,8 +29,8 @@ type top struct {
 }
 type Lobby struct {
 	Deck       *poker.Deck
-	Players    []player.PlayUnit
-	Admin      player.PlayUnit
+	Players    []*player.PlayUnit
+	Admin      *player.PlayUnit
 	Board      player.PlayUnit
 	SmallBlind int
 	MaxBet     int
@@ -64,7 +64,7 @@ func (l *Lobby) ConnHandle(plr *player.PlayUnit) {
 		if l.isRating {
 			go l.tickerTillGame()
 		} else {
-			l.Admin = *plr
+			l.Admin = plr
 			plr.Admin = true
 		}
 	})
@@ -79,7 +79,7 @@ func (l *Lobby) ConnHandle(plr *player.PlayUnit) {
 	}()
 	for _, v := range l.Players { // load current state of the game
 		if v.Place != plr.Place {
-			v = v.PrivateSend()
+			*v = v.PrivateSend()
 		}
 		err := plr.Conn.WriteJSON(v)
 		if err != nil {
@@ -120,7 +120,7 @@ func (l *Lobby) tickerTillNextTurn() {
 		l.PlayerBroadcast <- l.Players[l.Order].SendTimeValue(timevalue)
 		if timevalue >= 30 {
 			l.TurnTicker.Stop()
-			l.PlayerCh <- l.Players[l.Order]
+			l.PlayerCh <- *l.Players[l.Order]
 		}
 	}
 }
@@ -153,7 +153,7 @@ func (l *Lobby) Game() {
 					l.Board.Cards = append(l.Board.Cards, flopcard[0])
 				case postriver:
 					l.CalcWinners()
-					newPlayers := make([]player.PlayUnit, 0, 8)
+					newPlayers := make([]*player.PlayUnit, 0, 8)
 					ch := make(chan bool, 1)
 					stages = -1
 					for i, v := range l.Players {
@@ -165,11 +165,11 @@ func (l *Lobby) Game() {
 								ch <- true
 							}
 						}()
-						l.PlayerBroadcast <- v ////////////// calculate rating
+						l.PlayerBroadcast <- *v ////////////// calculate rating
 					}
 					<-ch
 					if len(newPlayers) == 1 {
-						/////////////////////////////////////
+						break ///////////////////////////////////
 					}
 					l.Players = newPlayers
 					l.DealNewHand()
@@ -201,9 +201,9 @@ func (l *Lobby) DealNewHand() {
 		v.Cards = l.Deck.Draw(2)
 		v.Place = i
 		if i+1 == len(l.Players) {
-			v.NextPlayer = &l.Players[0]
+			v.NextPlayer = l.Players[0]
 		} else {
-			v.NextPlayer = &l.Players[i+1]
+			v.NextPlayer = l.Players[i+1]
 		}
 	}
 	l.Board = player.PlayUnit{}

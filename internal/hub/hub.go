@@ -10,16 +10,16 @@ import (
 
 type Hub struct {
 	Lobby      map[string]*lobby.Lobby
-	ReqPlayers chan player.PlayUnit
+	ReqPlayers chan *player.PlayUnit
 	wg         sync.WaitGroup
 }
 
 func NewHub() *Hub {
-	return &Hub{ReqPlayers: make(chan player.PlayUnit, 1250)}
+	return &Hub{ReqPlayers: make(chan *player.PlayUnit, 1250)}
 }
 
 func (h *Hub) GreenReceive() {
-	plrs := make([]player.PlayUnit, 0, 8)
+	plrs := make([]*player.PlayUnit, 0, 8)
 	for i := range h.ReqPlayers {
 		plrs = append(plrs, i)
 		if len(plrs) == 8 {
