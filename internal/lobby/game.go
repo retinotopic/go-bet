@@ -30,7 +30,7 @@ type top struct {
 type Lobby struct {
 	Deck       *poker.Deck
 	Players    []*player.PlayUnit
-	Admin      *player.PlayUnit
+	Admin      player.PlayUnit
 	Board      player.PlayUnit
 	SmallBlind int
 	MaxBet     int
@@ -64,7 +64,7 @@ func (l *Lobby) ConnHandle(plr *player.PlayUnit) {
 		if l.isRating {
 			go l.tickerTillGame()
 		} else {
-			l.Admin = plr
+			l.Admin = *plr
 			plr.Admin = true
 		}
 	})
@@ -169,7 +169,7 @@ func (l *Lobby) Game() {
 					}
 					<-ch
 					if len(newPlayers) == 1 {
-						break ///////////////////////////////////
+						/////////////////////////////////////
 					}
 					l.Players = newPlayers
 					l.DealNewHand()
@@ -189,7 +189,6 @@ func (l *Lobby) Broadcast() {
 				pb = v.PrivateSend()
 			}
 			v.Conn.WriteJSON(pb)
-			fmt.Println(v, "checkerv1")
 		}
 	}
 }

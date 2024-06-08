@@ -2,6 +2,8 @@ package db
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"sync"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -9,17 +11,22 @@ import (
 	"github.com/retinotopic/go-bet/internal/player"
 )
 
-type PgClient struct {
-	Sub              string
-	Name             string
-	UserID           uint32
-	Conn             *pgxpool.Conn
-	Mutex            sync.Mutex
-	RoomsPagination  []uint32
-	RoomsCount       uint8 // no more than 250
-	PaginationOffset uint8
-	CurrentLobby     *lobby.Lobby
-	Player           *player.PlayUnit
+type PostgresClient struct {
+	Sub          string
+	Name         string
+	UserID       uint32
+	Conn         *pgxpool.Conn
+	Mutex        sync.Mutex
+	CurrentLobby *lobby.Lobby
+	Player       *player.PlayUnit
+}
+
+func NewUser(ctx context.Context, sub, username string, pool *pgxpool.Pool) error {
+	if strings.ContainsAny(username, " \t\n") {
+		return errors.New("contains spaces")
+	}
+	_, err := pool.Exec(ctx, "INSERT INTO users (subject,username) VALUES ($1,$2)", sub, username)
+	return err
 }
 
 func ConnectToDB(ctx context.Context, connString string) (*pgxpool.Pool, error) {
@@ -29,7 +36,7 @@ func ConnectToDB(ctx context.Context, connString string) (*pgxpool.Pool, error) 
 	}
 	return db, ctx.Err()
 }
-func NewClient(ctx context.Context, sub string, pool *pgxpool.Pool) (*PgClient, error) {
+func NewClient(ctx context.Context, sub string, pool *pgxpool.Pool) (*PostgresClient, error) {
 	// check if user exists
 	row := pool.QueryRow(ctx, "SELECT user_id,username FROM users WHERE subject=$1", sub)
 	var name string
@@ -42,7 +49,7 @@ func NewClient(ctx context.Context, sub string, pool *pgxpool.Pool) (*PgClient, 
 	if err != nil {
 		return nil, err
 	}
-	pc := &PgClient{
+	pc := &PostgresClient{
 		Sub:    sub,
 		Conn:   conn,
 		UserID: userid,
