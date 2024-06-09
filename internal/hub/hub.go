@@ -34,6 +34,7 @@ func (h *Hub) GreenReceive() {
 }
 func (h *Hub) Requests() {
 	t := time.NewTicker(time.Millisecond * 25)
+	t1 := time.NewTimer(time.Second * 30)
 	for range t.C {
 		s := len(h.ReqPlayers) / 8
 		for range s {
@@ -42,5 +43,29 @@ func (h *Hub) Requests() {
 		}
 		h.wg.Wait()
 		t.Reset(time.Millisecond * 25)
+	}
+	for {
+		select {
+		case <-t.C:
+			s := len(h.ReqPlayers) / 8
+			for range s {
+				h.wg.Add(1)
+				go h.GreenReceive()
+			}
+			h.wg.Wait()
+			t.Reset(time.Millisecond * 25)
+			t1.Reset(time.Second * 30)
+		case <-t1.C:
+			s := len(h.ReqPlayers)
+			if s > 1 {
+				for range s {
+					h.wg.Add(1)
+					go h.GreenReceive()
+				}
+				h.wg.Wait()
+				t.Reset(time.Millisecond * 25)
+				t1.Reset(time.Second * 30)
+			}
+		}
 	}
 }
