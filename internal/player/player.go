@@ -2,7 +2,7 @@ package player
 
 import (
 	"github.com/chehsunliu/poker"
-	"github.com/gorilla/websocket"
+	"github.com/fasthttp/websocket"
 )
 
 type PlayUnit struct {

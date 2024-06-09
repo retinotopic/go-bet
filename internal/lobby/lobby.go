@@ -11,8 +11,8 @@ import (
 	"github.com/retinotopic/go-bet/pkg/randfuncs"
 )
 
-func NewLobby(players []*player.PlayUnit) *Lobby {
-	l := &Lobby{Players: players, PlayerCh: make(chan player.PlayUnit), StartGame: make(chan struct{}, 1)}
+func NewLobby() *Lobby {
+	l := &Lobby{PlayerCh: make(chan player.PlayUnit), StartGame: make(chan struct{}, 1)}
 	return l
 }
 
@@ -45,7 +45,6 @@ type Lobby struct {
 }
 
 func (l *Lobby) LobbyWork() {
-	fmt.Println("im in")
 	for {
 		select {
 		case x := <-l.PlayerCh: // broadcoasting one seat to everyone

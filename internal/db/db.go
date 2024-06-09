@@ -11,7 +11,7 @@ import (
 	"github.com/retinotopic/go-bet/internal/player"
 )
 
-type PostgresClient struct {
+type PgClient struct {
 	Sub          string
 	Name         string
 	UserID       uint32
@@ -36,7 +36,7 @@ func ConnectToDB(ctx context.Context, connString string) (*pgxpool.Pool, error) 
 	}
 	return db, ctx.Err()
 }
-func NewClient(ctx context.Context, sub string, pool *pgxpool.Pool) (*PostgresClient, error) {
+func NewClient(ctx context.Context, sub string, pool *pgxpool.Pool) (*PgClient, error) {
 	// check if user exists
 	row := pool.QueryRow(ctx, "SELECT user_id,username FROM users WHERE subject=$1", sub)
 	var name string
@@ -49,7 +49,7 @@ func NewClient(ctx context.Context, sub string, pool *pgxpool.Pool) (*PostgresCl
 	if err != nil {
 		return nil, err
 	}
-	pc := &PostgresClient{
+	pc := &PgClient{
 		Sub:    sub,
 		Conn:   conn,
 		UserID: userid,
