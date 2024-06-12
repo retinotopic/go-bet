@@ -7,12 +7,11 @@ import (
 	"time"
 
 	"github.com/chehsunliu/poker"
-	"github.com/retinotopic/go-bet/internal/player"
 	"github.com/retinotopic/go-bet/pkg/randfuncs"
 )
 
 func NewLobby() *Lobby {
-	l := &Lobby{PlayerCh: make(chan player.PlayUnit), StartGame: make(chan struct{}, 1)}
+	l := &Lobby{PlayerCh: make(chan PlayUnit), StartGame: make(chan struct{}, 1)}
 	return l
 }
 
@@ -29,18 +28,18 @@ type top struct {
 }
 type Lobby struct {
 	Deck       *poker.Deck
-	Players    []*player.PlayUnit
-	Admin      player.PlayUnit
-	Board      player.PlayUnit
+	Players    []*PlayUnit
+	Admin      PlayUnit
+	Board      PlayUnit
 	SmallBlind int
 	MaxBet     int
 	TurnTicker *time.Ticker
 	sync.Mutex
 	Order           int
 	AdminOnce       sync.Once
-	PlayerCh        chan player.PlayUnit
+	PlayerCh        chan PlayUnit
 	StartGame       chan struct{}
-	PlayerBroadcast chan player.PlayUnit
+	PlayerBroadcast chan PlayUnit
 	isRating        bool
 }
 
@@ -57,7 +56,7 @@ func (l *Lobby) LobbyWork() {
 	}
 }
 
-func (l *Lobby) ConnHandle(plr *player.PlayUnit) {
+func (l *Lobby) ConnHandle(plr *PlayUnit) {
 	fmt.Println("im in2")
 	l.AdminOnce.Do(func() {
 		if l.isRating {
@@ -87,7 +86,7 @@ func (l *Lobby) ConnHandle(plr *player.PlayUnit) {
 		fmt.Println("start")
 	}
 	for {
-		ctrl := player.PlayUnit{}
+		ctrl := PlayUnit{}
 		err := plr.Conn.ReadJSON(&ctrl)
 		if err != nil {
 			fmt.Println(err, "conn read error")
@@ -126,7 +125,7 @@ func (l *Lobby) tickerTillNextTurn() {
 func (l *Lobby) Game() {
 	var stages int
 	randfuncs.NewSource().Shuffle(len(l.Players), func(i, j int) { l.Players[i], l.Players[j] = l.Players[j], l.Players[i] })
-	l.PlayerBroadcast = make(chan player.PlayUnit)
+	l.PlayerBroadcast = make(chan PlayUnit)
 	l.DealNewHand()
 	go l.tickerTillNextTurn()
 	for pl := range l.PlayerCh { // evaluating hand
@@ -152,7 +151,7 @@ func (l *Lobby) Game() {
 					l.Board.Cards = append(l.Board.Cards, flopcard[0])
 				case postriver:
 					l.CalcWinners()
-					newPlayers := make([]*player.PlayUnit, 0, 8)
+					newPlayers := make([]*PlayUnit, 0, 8)
 					ch := make(chan bool, 1)
 					stages = -1
 					for i, v := range l.Players {
@@ -204,7 +203,7 @@ func (l *Lobby) DealNewHand() {
 			v.NextPlayer = l.Players[i+1]
 		}
 	}
-	l.Board = player.PlayUnit{}
+	l.Board = PlayUnit{}
 	l.Board.Cards = make([]poker.Card, 0, 7)
 
 	l.Players[0].Bet = l.SmallBlind

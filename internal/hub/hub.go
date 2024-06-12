@@ -6,11 +6,11 @@ import (
 
 	"github.com/retinotopic/go-bet/internal/db"
 	"github.com/retinotopic/go-bet/internal/lobby"
-	"github.com/retinotopic/go-bet/internal/player"
 )
 
 type Hub struct {
 	Lobby      map[string]*lobby.Lobby
+	Player     map[string]*lobby.PlayUnit
 	ReqPlayers chan *db.PgClient
 	wg         sync.WaitGroup
 }
@@ -20,11 +20,11 @@ func NewHub() *Hub {
 }
 
 func (h *Hub) GreenReceive() {
-	plrs := make([]*player.PlayUnit, 0, 8)
+	plrs := make([]*lobby.PlayUnit, 0, 8)
 	lb := lobby.NewLobby()
 	for cl := range h.ReqPlayers {
 		cl.CurrentLobby = lb
-		cl.Player = &player.PlayUnit{}
+		cl.Player = &lobby.PlayUnit{}
 		plrs = append(plrs, cl.Player)
 		if len(plrs) == 8 {
 			h.wg.Done()
