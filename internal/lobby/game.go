@@ -13,10 +13,10 @@ func (l *Lobby) tickerTillNextTurn() {
 	timevalue := 0
 	for range l.TurnTicker.C {
 		timevalue++
-		l.PlayerBroadcast <- l.Players[l.Order].SendTimeValue(timevalue)
+		l.PlayerBroadcast <- l.Players[l.PlayersRing.Idx].SendTimeValue(timevalue)
 		if timevalue >= 30 {
 			l.TurnTicker.Stop()
-			l.PlayerCh <- *l.Players[l.Order]
+			l.PlayerCh <- *l.Players[l.PlayersRing.Idx]
 		}
 	}
 }
@@ -27,7 +27,7 @@ func (l *Lobby) Game() {
 	l.DealNewHand()
 	go l.tickerTillNextTurn()
 	for pl := range l.PlayerCh { // evaluating hand
-		if pl.Place == l.Order {
+		if pl.Place == l.PlayersRing.Idx {
 			l.TurnTicker.Stop()
 			if pl.Bet >= l.MaxBet {
 				l.MaxBet = pl.Bet
@@ -36,9 +36,8 @@ func (l *Lobby) Game() {
 			}
 			pl.HasActed = true
 			for pl.IsFold {
-				pl = *pl.NextPlayer
+				pl = *l.PlayersRing.Next(1)
 			}
-			l.Order = pl.Place
 			if pl.Bet == l.MaxBet && pl.HasActed {
 				switch turn {
 				case flop: // preflop to flop
@@ -50,20 +49,13 @@ func (l *Lobby) Game() {
 				case postriver:
 					l.CalcWinners()
 					newPlayers := make([]*PlayUnit, 0, 8)
-					ch := make(chan bool, 1)
 					stages = -1
-					for i, v := range l.Players {
-						go func() {
-							if v.Bankroll > 0 {
-								newPlayers = append(newPlayers, v)
-							}
-							if len(l.Players)-1 == i {
-								ch <- true
-							}
-						}()
-						l.PlayerBroadcast <- *v ////////////// calculate rating
+					for _, v := range l.Players {
+						go func() { l.PlayerBroadcast <- *v }()
+						if v.Bankroll > 0 {
+							newPlayers = append(newPlayers, v)
+						}
 					}
-					<-ch
 					if len(newPlayers) == 1 {
 						/////////////////////////////////////
 					}
@@ -80,22 +72,20 @@ func (l *Lobby) DealNewHand() {
 	l.Deck = poker.NewDeck()
 	l.Deck.Shuffle()
 
-	for i, v := range l.Players {
+	for i, v := range l.PlayersRing.Data {
 		v.Cards = l.Deck.Draw(2)
 		v.Place = i
-		if i+1 == len(l.Players) {
-			v.NextPlayer = l.Players[0]
-		} else {
-			v.NextPlayer = l.Players[i+1]
-		}
 	}
 	l.Board = PlayUnit{}
 	l.Board.Cards = make([]poker.Card, 0, 7)
 
-	l.Players[0].Bet = l.SmallBlind
-	l.Players[0].NextPlayer.Bet = l.SmallBlind * 2
-	l.Order = l.Players[0].NextPlayer.NextPlayer.Place
+	l.PlayersRing.Next(1).Bet = l.SmallBlind
+	l.PlayersRing.Next(2).Bet = l.SmallBlind * 2
 	//send all players to all players (broadcast)
+	for _, pl := range l.PlayersRing.Data {
+		l.PlayerBroadcast <- *pl
+	}
+	l.TurnTicker.Reset(time.Second * 30)
 }
 
 func (l *Lobby) CalcWinners() {

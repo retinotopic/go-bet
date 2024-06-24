@@ -25,15 +25,15 @@ type top struct {
 	rating int32
 }
 type Lobby struct {
-	Deck       *poker.Deck
-	Players    []*PlayUnit
+	Deck    *poker.Deck
+	Players []*PlayUnit
+	PlayersRing
 	Admin      PlayUnit
 	Board      PlayUnit
 	SmallBlind int
 	MaxBet     int
 	TurnTicker *time.Ticker
 	sync.Mutex
-	Order           int
 	AdminOnce       sync.Once
 	PlayerCh        chan PlayUnit
 	StartGame       chan struct{}

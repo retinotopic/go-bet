@@ -4,28 +4,27 @@ import (
 	"sync"
 	"time"
 
-	"github.com/retinotopic/go-bet/internal/db"
 	"github.com/retinotopic/go-bet/internal/lobby"
 )
 
 type Hub struct {
 	Lobby      map[string]*lobby.Lobby
 	Player     map[string]*lobby.PlayUnit
-	ReqPlayers chan *db.PgClient
+	ReqPlayers chan *lobby.PlayUnit
 	wg         sync.WaitGroup
 }
 
 func NewHub() *Hub {
-	return &Hub{ReqPlayers: make(chan *db.PgClient, 1250)}
+	return &Hub{ReqPlayers: make(chan *lobby.PlayUnit, 1250)}
 }
 
 func (h *Hub) GreenReceive() {
 	plrs := make([]*lobby.PlayUnit, 0, 8)
 	lb := lobby.NewLobby()
 	for cl := range h.ReqPlayers {
-		cl.CurrentLobby = lb
-		cl.Player = &lobby.PlayUnit{}
-		plrs = append(plrs, cl.Player)
+		plrs = append(plrs, cl)
+		lb.Players = plrs
+		lb.LobbyWork()
 		if len(plrs) == 8 {
 			h.wg.Done()
 			return
@@ -46,7 +45,7 @@ func (h *Hub) Requests() {
 			h.wg.Wait()
 			t.Reset(time.Millisecond * 25)
 			t1.Reset(time.Second * 30)
-		case <-t1.C:
+		case <-t1.C: //if there is no lobby after 30 seconds, the game will start if there are more than 1 player
 			s := len(h.ReqPlayers)
 			if s > 1 {
 				for range s {

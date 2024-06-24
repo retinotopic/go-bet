@@ -7,17 +7,14 @@ import (
 	"sync"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/retinotopic/go-bet/internal/lobby"
 )
 
 type PgClient struct {
-	Sub          string
-	Name         string
-	UserID       uint32
-	Conn         *pgxpool.Conn
-	Mutex        sync.Mutex
-	CurrentLobby *lobby.Lobby
-	Player       *lobby.PlayUnit
+	Sub    string
+	Name   string
+	UserID uint32
+	Conn   *pgxpool.Conn
+	Mutex  sync.Mutex
 }
 
 func NewUser(ctx context.Context, sub, username string, pool *pgxpool.Pool) error {

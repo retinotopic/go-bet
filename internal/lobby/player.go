@@ -5,6 +5,16 @@ import (
 	"github.com/fasthttp/websocket"
 )
 
+type PlayersRing struct {
+	Data []*PlayUnit
+	Idx  int
+}
+
+func (rs *PlayersRing) Next(offset int) *PlayUnit {
+	rs.Idx = (rs.Idx + offset) % len(rs.Data)
+	return rs.Data[rs.Idx]
+}
+
 type PlayUnit struct {
 	User_id      int
 	Name         string `json:"Name"`
@@ -17,7 +27,6 @@ type PlayUnit struct {
 	Admin        bool         `json:"IsAdmin"`
 	Cards        []poker.Card `json:"Hand,omitempty"`
 	ValueSec     int          `json:"Time,omitempty"`
-	NextPlayer   *PlayUnit
 	CurrentLobby *Lobby
 }
 
