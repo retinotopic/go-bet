@@ -23,7 +23,7 @@ func (h *Hub) GreenReceive() {
 	lb := lobby.NewLobby()
 	for cl := range h.ReqPlayers {
 		plrs = append(plrs, cl)
-		lb.Players = plrs
+		lb.PlayersRing.Data = plrs
 		lb.LobbyWork()
 		if len(plrs) == 8 {
 			h.wg.Done()

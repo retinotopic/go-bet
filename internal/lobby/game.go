@@ -13,16 +13,18 @@ func (l *Lobby) tickerTillNextTurn() {
 	timevalue := 0
 	for range l.TurnTicker.C {
 		timevalue++
-		l.PlayerBroadcast <- l.Players[l.PlayersRing.Idx].SendTimeValue(timevalue)
+		l.PlayerBroadcast <- l.PlayersRing.Data[l.PlayersRing.Idx].SendTimeValue(timevalue)
 		if timevalue >= 30 {
 			l.TurnTicker.Stop()
-			l.PlayerCh <- *l.Players[l.PlayersRing.Idx]
+			l.PlayerCh <- *l.PlayersRing.Data[l.PlayersRing.Idx]
 		}
 	}
 }
 func (l *Lobby) Game() {
 	var stages int
-	randfuncs.NewSource().Shuffle(len(l.Players), func(i, j int) { l.Players[i], l.Players[j] = l.Players[j], l.Players[i] })
+	randfuncs.NewSource().Shuffle(len(l.PlayersRing.Data), func(i, j int) {
+		l.PlayersRing.Data[i], l.PlayersRing.Data[j] = l.PlayersRing.Data[j], l.PlayersRing.Data[i]
+	})
 	l.PlayerBroadcast = make(chan PlayUnit)
 	l.DealNewHand()
 	go l.tickerTillNextTurn()
@@ -50,7 +52,7 @@ func (l *Lobby) Game() {
 					l.CalcWinners()
 					newPlayers := make([]*PlayUnit, 0, 8)
 					stages = -1
-					for _, v := range l.Players {
+					for _, v := range l.PlayersRing.Data {
 						go func() { l.PlayerBroadcast <- *v }()
 						if v.Bankroll > 0 {
 							newPlayers = append(newPlayers, v)
@@ -59,8 +61,11 @@ func (l *Lobby) Game() {
 					if len(newPlayers) == 1 {
 						/////////////////////////////////////
 					}
-					l.Players = newPlayers
+					l.PlayersRing.Data = newPlayers
 					l.DealNewHand()
+				}
+				for _, v := range l.PlayersRing.Data {
+					v.HasActed = false
 				}
 			}
 			stages++
@@ -92,7 +97,7 @@ func (l *Lobby) CalcWinners() {
 	var emptyCard poker.Card
 	topPlaces := make([]top, 0, 7)
 	l.Board.Cards = append(l.Board.Cards, emptyCard, emptyCard)
-	for i, v := range l.Players {
+	for i, v := range l.PlayersRing.Data {
 		if !v.IsFold {
 			l.Board.Cards[5] = v.Cards[0]
 			l.Board.Cards[6] = v.Cards[1]
@@ -109,6 +114,6 @@ func (l *Lobby) CalcWinners() {
 	}
 	share := l.Board.Bankroll / i
 	for pl := range i {
-		l.Players[topPlaces[pl].place].Bankroll += share
+		l.PlayersRing.Data[topPlaces[pl].place].Bankroll += share
 	}
 }

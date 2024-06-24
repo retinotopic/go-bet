@@ -25,8 +25,7 @@ type top struct {
 	rating int32
 }
 type Lobby struct {
-	Deck    *poker.Deck
-	Players []*PlayUnit
+	Deck *poker.Deck
 	PlayersRing
 	Admin      PlayUnit
 	Board      PlayUnit
@@ -45,7 +44,7 @@ func (l *Lobby) LobbyWork() {
 	for {
 		select {
 		case x := <-l.PlayerCh: // broadcoasting one seat to everyone
-			for _, v := range l.Players {
+			for _, v := range l.PlayersRing.Data {
 				v.Conn.WriteJSON(x)
 			}
 		case <-l.StartGame:
@@ -73,7 +72,7 @@ func (l *Lobby) ConnHandle(plr *PlayUnit) {
 			}
 		}
 	}()
-	for _, v := range l.Players { // load current state of the game
+	for _, v := range l.PlayersRing.Data { // load current state of the game
 		if v.Place != plr.Place {
 			*v = v.PrivateSend()
 		}
@@ -112,7 +111,7 @@ func (l *Lobby) tickerTillGame() {
 // player broadcast method
 func (l *Lobby) Broadcast() {
 	for pb := range l.PlayerBroadcast {
-		for _, v := range l.Players {
+		for _, v := range l.PlayersRing.Data {
 			if pb.Place != v.Place {
 				pb = v.PrivateSend()
 			}
