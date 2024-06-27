@@ -23,9 +23,9 @@ func (h *Hub) GreenReceive() {
 	lb := lobby.NewLobby()
 	for cl := range h.ReqPlayers {
 		plrs = append(plrs, cl)
-		lb.PlayersRing.Data = plrs
-		lb.LobbyWork()
 		if len(plrs) == 8 {
+			lb.PlayersRing.Data = plrs
+			lb.LobbyWork()
 			h.wg.Done()
 			return
 		}
@@ -48,10 +48,8 @@ func (h *Hub) Requests() {
 		case <-t1.C: //if there is no lobby after 30 seconds, the game will start if there are more than 1 player
 			s := len(h.ReqPlayers)
 			if s > 1 {
-				for range s {
-					h.wg.Add(1)
-					go h.GreenReceive()
-				}
+				h.wg.Add(1)
+				go h.GreenReceive()
 				h.wg.Wait()
 				t.Reset(time.Millisecond * 25)
 				t1.Reset(time.Second * 30)

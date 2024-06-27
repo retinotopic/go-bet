@@ -9,7 +9,7 @@ import (
 )
 
 func NewLobby() *Lobby {
-	l := &Lobby{PlayerCh: make(chan PlayUnit), StartGame: make(chan struct{}, 1)}
+	l := &Lobby{PlayerCh: make(chan PlayUnit), StartGame: make(chan bool, 1)}
 	return l
 }
 
@@ -35,7 +35,7 @@ type Lobby struct {
 	sync.Mutex
 	AdminOnce       sync.Once
 	PlayerCh        chan PlayUnit
-	StartGame       chan struct{}
+	StartGame       chan bool
 	PlayerBroadcast chan PlayUnit
 	isRating        bool
 }
@@ -97,14 +97,10 @@ func (l *Lobby) ConnHandle(plr *PlayUnit) {
 	}
 }
 func (l *Lobby) tickerTillGame() {
-	ticker := time.NewTicker(time.Second * 1)
-	i := 0
-	for range ticker.C {
-		if i >= 15 {
-			l.StartGame <- struct{}{}
-			return
-		}
-		i++
+	timer := time.NewTimer(time.Second * 30)
+	for range timer.C {
+		l.StartGame <- true
+		return
 	}
 }
 
