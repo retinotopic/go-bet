@@ -1,6 +1,7 @@
 package lobby
 
 import (
+	"math"
 	"sort"
 	"time"
 
@@ -21,8 +22,9 @@ func (l *Lobby) tickerTillNextTurn() {
 	}
 }
 func (l *Lobby) Game() {
+	lenpl := len(l.PlayersRing.Data)
 	var stages int
-	randfuncs.NewSource().Shuffle(len(l.PlayersRing.Data), func(i, j int) {
+	randfuncs.NewSource().Shuffle(lenpl, func(i, j int) {
 		l.PlayersRing.Data[i], l.PlayersRing.Data[j] = l.PlayersRing.Data[j], l.PlayersRing.Data[i]
 	})
 	l.PlayerBroadcast = make(chan PlayUnit)
@@ -51,15 +53,25 @@ func (l *Lobby) Game() {
 				case postriver:
 					l.CalcWinners()
 					newPlayers := make([]*PlayUnit, 0, 8)
+					elims := make([]*PlayUnit, 0, 8)
+					var last int
 					stages = -1
-					for _, v := range l.PlayersRing.Data {
+					for i, v := range l.PlayersRing.Data {
 						go func() { l.PlayerBroadcast <- *v }()
+
 						if v.Bankroll > 0 {
 							newPlayers = append(newPlayers, v)
+						} else {
+							last = len(l.PlayersRing.Data) - i
+							elims = append(elims, v)
 						}
 					}
+					if len(elims) != 0 {
+						_ = l.CalcRating(lenpl, last)
+					}
 					if len(newPlayers) == 1 {
-						/////////////////////////////////////
+						_ = l.CalcRating(lenpl, 1)
+						return
 					}
 					l.PlayersRing.Data = newPlayers
 					l.DealNewHand()
@@ -116,4 +128,20 @@ func (l *Lobby) CalcWinners() {
 	for pl := range i {
 		l.PlayersRing.Data[topPlaces[pl].place].Bankroll += share
 	}
+}
+func (l *Lobby) CalcRating(players, place int) int {
+	if players < 2 || players > 8 {
+		return 0
+	}
+
+	if place < 1 || place > players {
+		return 0
+	}
+
+	baseChange := 30
+	middlePlace := float64(players+1) / 2
+
+	ratingChange := int(math.Round(float64(baseChange) * (middlePlace - float64(place)) / (middlePlace - 1)))
+
+	return ratingChange
 }
