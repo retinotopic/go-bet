@@ -37,14 +37,16 @@ type Lobby struct {
 	PlayerCh        chan PlayUnit
 	StartGame       chan bool
 	PlayerBroadcast chan PlayUnit
-	isRating        bool
+	IsRating        bool
+	LenPlayers      int
 }
 
 func (l *Lobby) LobbyWork() {
+	l.LenPlayers = len(l.Players)
 	for {
 		select {
 		case x := <-l.PlayerCh: // broadcoasting one seat to everyone
-			for _, v := range l.PlayersRing.Data {
+			for _, v := range l.Players {
 				v.Conn.WriteJSON(x)
 			}
 		case <-l.StartGame:
@@ -56,7 +58,7 @@ func (l *Lobby) LobbyWork() {
 func (l *Lobby) ConnHandle(plr *PlayUnit) {
 	fmt.Println("im in2")
 	l.AdminOnce.Do(func() {
-		if l.isRating {
+		if l.IsRating {
 			go l.tickerTillGame()
 		} else {
 			l.Admin = *plr
@@ -72,7 +74,7 @@ func (l *Lobby) ConnHandle(plr *PlayUnit) {
 			}
 		}
 	}()
-	for _, v := range l.PlayersRing.Data { // load current state of the game
+	for _, v := range l.Players { // load current state of the game
 		if v.Place != plr.Place {
 			*v = v.PrivateSend()
 		}
@@ -107,7 +109,7 @@ func (l *Lobby) tickerTillGame() {
 // player broadcast method
 func (l *Lobby) Broadcast() {
 	for pb := range l.PlayerBroadcast {
-		for _, v := range l.PlayersRing.Data {
+		for _, v := range l.Players {
 			if pb.Place != v.Place {
 				pb = v.PrivateSend()
 			}

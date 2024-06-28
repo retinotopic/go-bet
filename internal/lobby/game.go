@@ -14,18 +14,17 @@ func (l *Lobby) tickerTillNextTurn() {
 	timevalue := 0
 	for range l.TurnTicker.C {
 		timevalue++
-		l.PlayerBroadcast <- l.PlayersRing.Data[l.PlayersRing.Idx].SendTimeValue(timevalue)
+		l.PlayerBroadcast <- l.Players[l.PlayersRing.Idx].SendTimeValue(timevalue)
 		if timevalue >= 30 {
 			l.TurnTicker.Stop()
-			l.PlayerCh <- *l.PlayersRing.Data[l.PlayersRing.Idx]
+			l.PlayerCh <- *l.Players[l.PlayersRing.Idx]
 		}
 	}
 }
 func (l *Lobby) Game() {
-	lenpl := len(l.PlayersRing.Data)
 	var stages int
-	randfuncs.NewSource().Shuffle(lenpl, func(i, j int) {
-		l.PlayersRing.Data[i], l.PlayersRing.Data[j] = l.PlayersRing.Data[j], l.PlayersRing.Data[i]
+	randfuncs.NewSource().Shuffle(l.LenPlayers, func(i, j int) {
+		l.Players[i], l.Players[j] = l.Players[j], l.Players[i]
 	})
 	l.PlayerBroadcast = make(chan PlayUnit)
 	l.DealNewHand()
@@ -56,27 +55,25 @@ func (l *Lobby) Game() {
 					elims := make([]*PlayUnit, 0, 8)
 					var last int
 					stages = -1
-					for i, v := range l.PlayersRing.Data {
-						go func() { l.PlayerBroadcast <- *v }()
-
+					for i, v := range l.Players {
 						if v.Bankroll > 0 {
 							newPlayers = append(newPlayers, v)
 						} else {
-							last = len(l.PlayersRing.Data) - i
+							last = len(l.Players) - i
 							elims = append(elims, v)
 						}
 					}
 					if len(elims) != 0 {
-						_ = l.CalcRating(lenpl, last)
+						l.CalcRating(elims, last)
 					}
 					if len(newPlayers) == 1 {
-						_ = l.CalcRating(lenpl, 1)
+						l.CalcRating(newPlayers, 1)
 						return
 					}
-					l.PlayersRing.Data = newPlayers
+					l.Players = newPlayers
 					l.DealNewHand()
 				}
-				for _, v := range l.PlayersRing.Data {
+				for _, v := range l.Players {
 					v.HasActed = false
 				}
 			}
@@ -89,7 +86,7 @@ func (l *Lobby) DealNewHand() {
 	l.Deck = poker.NewDeck()
 	l.Deck.Shuffle()
 
-	for i, v := range l.PlayersRing.Data {
+	for i, v := range l.Players {
 		v.Cards = l.Deck.Draw(2)
 		v.Place = i
 	}
@@ -99,7 +96,7 @@ func (l *Lobby) DealNewHand() {
 	l.PlayersRing.Next(1).Bet = l.SmallBlind
 	l.PlayersRing.Next(2).Bet = l.SmallBlind * 2
 	//send all players to all players (broadcast)
-	for _, pl := range l.PlayersRing.Data {
+	for _, pl := range l.Players {
 		l.PlayerBroadcast <- *pl
 	}
 	l.TurnTicker.Reset(time.Second * 30)
@@ -109,7 +106,7 @@ func (l *Lobby) CalcWinners() {
 	var emptyCard poker.Card
 	topPlaces := make([]top, 0, 7)
 	l.Board.Cards = append(l.Board.Cards, emptyCard, emptyCard)
-	for i, v := range l.PlayersRing.Data {
+	for i, v := range l.Players {
 		if !v.IsFold {
 			l.Board.Cards[5] = v.Cards[0]
 			l.Board.Cards[6] = v.Cards[1]
@@ -126,22 +123,12 @@ func (l *Lobby) CalcWinners() {
 	}
 	share := l.Board.Bankroll / i
 	for pl := range i {
-		l.PlayersRing.Data[topPlaces[pl].place].Bankroll += share
+		l.Players[topPlaces[pl].place].Bankroll += share
 	}
 }
-func (l *Lobby) CalcRating(players, place int) int {
-	if players < 2 || players > 8 {
-		return 0
-	}
-
-	if place < 1 || place > players {
-		return 0
-	}
-
+func (l *Lobby) CalcRating(plr []*PlayUnit, place int) {
 	baseChange := 30
-	middlePlace := float64(players+1) / 2
+	middlePlace := float64(l.LenPlayers+1) / 2
+	_ = int(math.Round(float64(baseChange) * (middlePlace - float64(place)) / (middlePlace - 1)))
 
-	ratingChange := int(math.Round(float64(baseChange) * (middlePlace - float64(place)) / (middlePlace - 1)))
-
-	return ratingChange
 }
