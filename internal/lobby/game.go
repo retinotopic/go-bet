@@ -50,28 +50,8 @@ func (l *Lobby) Game() {
 					flopcard := l.Deck.Draw(1)
 					l.Board.Cards = append(l.Board.Cards, flopcard[0])
 				case postriver:
-					l.CalcWinners()
-					newPlayers := make([]*PlayUnit, 0, 8)
-					elims := make([]*PlayUnit, 0, 8)
-					var last int
+					l.PostRiver()
 					stages = -1
-					for i, v := range l.Players {
-						if v.Bankroll > 0 {
-							newPlayers = append(newPlayers, v)
-						} else {
-							last = len(l.Players) - i
-							elims = append(elims, v)
-						}
-					}
-					if len(elims) != 0 {
-						l.CalcRating(elims, last)
-					}
-					if len(newPlayers) == 1 {
-						l.CalcRating(newPlayers, 1)
-						return
-					}
-					l.Players = newPlayers
-					l.DealNewHand()
 				}
 				for _, v := range l.Players {
 					v.HasActed = false
@@ -82,6 +62,30 @@ func (l *Lobby) Game() {
 		}
 	}
 }
+func (l *Lobby) PostRiver() {
+	l.CalcWinners()
+	newPlayers := make([]*PlayUnit, 0, 8)
+	elims := make([]*PlayUnit, 0, 8)
+	var last int
+	for i, v := range l.Players {
+		if v.Bankroll > 0 {
+			newPlayers = append(newPlayers, v)
+		} else {
+			last = len(l.Players) - i
+			elims = append(elims, v)
+		}
+	}
+	if len(elims) != 0 {
+		l.CalcRating(elims, last)
+	}
+	if len(newPlayers) == 1 {
+		l.CalcRating(newPlayers, 1)
+		return
+	}
+	l.Players = newPlayers
+	l.DealNewHand()
+}
+
 func (l *Lobby) DealNewHand() {
 	l.Deck = poker.NewDeck()
 	l.Deck.Shuffle()
@@ -130,5 +134,5 @@ func (l *Lobby) CalcRating(plr []*PlayUnit, place int) {
 	baseChange := 30
 	middlePlace := float64(l.LenPlayers+1) / 2
 	_ = int(math.Round(float64(baseChange) * (middlePlace - float64(place)) / (middlePlace - 1)))
-
+	//l.Players[2].User_id
 }
