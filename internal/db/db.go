@@ -3,6 +3,8 @@ package db
 import (
 	"context"
 	"errors"
+	"log"
+	"os"
 	"strings"
 	"sync"
 
@@ -13,11 +15,20 @@ type PgClient struct {
 	Sub    string
 	Name   string
 	UserID uint32
-	Conn   *pgxpool.Conn
 	Mutex  sync.Mutex
 }
 
-func NewUser(ctx context.Context, sub, username string, pool *pgxpool.Pool) error {
+var pool *pgxpool.Pool
+
+func init() {
+	var err error
+	pool, err = pgxpool.New(context.Background(), os.Getenv("DATABASE_URL"))
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+}
+
+func NewUser(ctx context.Context, sub, username string) error {
 	if strings.ContainsAny(username, " \t\n") {
 		return errors.New("contains spaces")
 	}
@@ -25,14 +36,7 @@ func NewUser(ctx context.Context, sub, username string, pool *pgxpool.Pool) erro
 	return err
 }
 
-func ConnectToDB(ctx context.Context, connString string) (*pgxpool.Pool, error) {
-	db, err := pgxpool.New(ctx, connString)
-	if err != nil {
-		return nil, err
-	}
-	return db, ctx.Err()
-}
-func NewClient(ctx context.Context, sub string, pool *pgxpool.Pool) (*PgClient, error) {
+func NewClient(ctx context.Context, sub string) (*PgClient, error) {
 	// check if user exists
 	row := pool.QueryRow(ctx, "SELECT user_id,username FROM users WHERE subject=$1", sub)
 	var name string
@@ -41,13 +45,8 @@ func NewClient(ctx context.Context, sub string, pool *pgxpool.Pool) (*PgClient, 
 	if err != nil {
 		return nil, err
 	}
-	conn, err := pool.Acquire(ctx)
-	if err != nil {
-		return nil, err
-	}
 	pc := &PgClient{
 		Sub:    sub,
-		Conn:   conn,
 		UserID: userid,
 		Name:   name,
 	}

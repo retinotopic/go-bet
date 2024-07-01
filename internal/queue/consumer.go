@@ -16,3 +16,11 @@ func (t *TaskQueue) ConsumeQueue(queueName string) error {
 	t.Consume = consume
 	return nil
 }
+
+func (t *TaskQueue) ProcessConsume() {
+	for msg := range t.Consume {
+		msg.Nack(false, true)
+
+	}
+
+}

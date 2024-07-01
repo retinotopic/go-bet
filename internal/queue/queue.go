@@ -2,6 +2,7 @@ package queue
 
 import (
 	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/retinotopic/go-bet/internal/db"
 )
 
 type TaskQueue struct {
@@ -9,6 +10,7 @@ type TaskQueue struct {
 	Ch      *amqp.Channel
 	Consume <-chan amqp.Delivery
 	Queue   amqp.Queue
+	Db      db.PgClient
 }
 
 func NewTaskQueue(url string) (*TaskQueue, error) {
