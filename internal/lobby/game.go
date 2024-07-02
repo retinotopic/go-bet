@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/chehsunliu/poker"
+	"github.com/retinotopic/go-bet/internal/queue"
 	"github.com/retinotopic/go-bet/pkg/randfuncs"
 )
 
@@ -133,6 +134,11 @@ func (l *Lobby) CalcWinners() {
 func (l *Lobby) CalcRating(plr []*PlayUnit, place int) {
 	baseChange := 30
 	middlePlace := float64(l.LenPlayers+1) / 2
-	_ = int(math.Round(float64(baseChange) * (middlePlace - float64(place)) / (middlePlace - 1)))
-	//l.Players[2].User_id
+	for _, plr := range plr {
+		rating := int(math.Round(float64(baseChange) * (middlePlace - float64(place)) / (middlePlace - 1)))
+		data, err := queue.NewMessage(plr.User_id, rating)
+		if err != nil {
+			queue.Queue.PublishTask(data)
+		}
+	}
 }

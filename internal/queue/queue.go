@@ -1,37 +1,41 @@
 package queue
 
 import (
-	amqp "github.com/rabbitmq/amqp091-go"
-	"github.com/retinotopic/go-bet/internal/db"
-)
+	"log"
+	"os"
 
-type TaskMessage struct {
-	User_id  int `json:"user_id"`
-	Rating   int `json:"rating"`
-	Attempts int `json:"attempts"`
-}
+	amqp "github.com/rabbitmq/amqp091-go"
+)
 
 type TaskQueue struct {
 	Conn    *amqp.Connection
 	Ch      *amqp.Channel
 	Consume <-chan amqp.Delivery
 	Queue   amqp.Queue
-	Db      db.PgClient
 }
 
-func NewTaskQueue(url string) (*TaskQueue, error) {
-	conn, err := amqp.Dial(url)
+var Queue TaskQueue
+
+func init() {
+	conn, err := amqp.Dial(os.Getenv("RABBITMQ_URL"))
 	if err != nil {
-		return nil, err
+		log.Fatalf("%v", err)
 	}
 
 	ch, err := conn.Channel()
 	if err != nil {
-		conn.Close()
-		return nil, err
+		log.Fatalf("%v", err)
 	}
 
-	return &TaskQueue{Conn: conn, Ch: ch}, nil
+	Queue = TaskQueue{Conn: conn, Ch: ch}
+	err = Queue.DeclareQueue("task_queue")
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+	err = Queue.ConsumeQueue()
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
 }
 
 func (t *TaskQueue) Close() {
