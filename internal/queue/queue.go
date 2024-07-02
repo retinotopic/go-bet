@@ -5,6 +5,12 @@ import (
 	"github.com/retinotopic/go-bet/internal/db"
 )
 
+type TaskMessage struct {
+	User_id  int `json:"user_id"`
+	Rating   int `json:"rating"`
+	Attempts int `json:"attempts"`
+}
+
 type TaskQueue struct {
 	Conn    *amqp.Connection
 	Ch      *amqp.Channel

@@ -8,7 +8,7 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-func (t *TaskQueue) PublishTask(task interface{}) error {
+func (t *TaskQueue) PublishTask(task TaskMessage) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	body, err := json.Marshal(task)

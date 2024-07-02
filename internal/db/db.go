@@ -35,7 +35,6 @@ func NewUser(ctx context.Context, sub, username string) error {
 	_, err := pool.Exec(ctx, "INSERT INTO users (subject,username) VALUES ($1,$2)", sub, username)
 	return err
 }
-
 func NewClient(ctx context.Context, sub string) (*PgClient, error) {
 	// check if user exists
 	row := pool.QueryRow(ctx, "SELECT user_id,username FROM users WHERE subject=$1", sub)
@@ -52,4 +51,10 @@ func NewClient(ctx context.Context, sub string) (*PgClient, error) {
 	}
 
 	return pc, nil
+}
+
+func ChangeRating(ctx context.Context, user_id string, rating int) error {
+	_, err := pool.Exec(ctx, `INSERT INTO ratings (user_id, rating) VALUES ($1,$2) 
+	ON CONFLICT (user_id) DO UPDATE SET rating = ratings.rating + $2`, user_id, rating)
+	return err
 }
