@@ -32,6 +32,7 @@ type Lobby struct {
 	SmallBlind int
 	MaxBet     int
 	TurnTicker *time.Ticker
+	BlindTimer *time.Timer
 	sync.Mutex
 	AdminOnce       sync.Once
 	PlayerCh        chan PlayUnit
@@ -99,7 +100,7 @@ func (l *Lobby) ConnHandle(plr *PlayUnit) {
 	}
 }
 func (l *Lobby) tickerTillGame() {
-	timer := time.NewTimer(time.Second * 30)
+	timer := time.NewTimer(time.Second * 45)
 	for range timer.C {
 		l.StartGame <- true
 		return

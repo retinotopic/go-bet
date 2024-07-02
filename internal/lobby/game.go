@@ -10,6 +10,13 @@ import (
 	"github.com/retinotopic/go-bet/pkg/randfuncs"
 )
 
+func (l *Lobby) timerTillBlind() {
+	l.BlindTimer = time.NewTimer(time.Minute * 5)
+	for range l.BlindTimer.C {
+		l.SmallBlind *= 2
+		l.BlindTimer.Reset(time.Minute * 5)
+	}
+}
 func (l *Lobby) tickerTillNextTurn() {
 	l.TurnTicker = time.NewTicker(time.Second * 1)
 	timevalue := 0
@@ -30,15 +37,21 @@ func (l *Lobby) Game() {
 	l.PlayerBroadcast = make(chan PlayUnit)
 	l.DealNewHand()
 	go l.tickerTillNextTurn()
+	go l.timerTillBlind()
 	for pl := range l.PlayerCh { // evaluating hand
 		if pl.Place == l.PlayersRing.Idx {
 			l.TurnTicker.Stop()
+			l.Lock()
+			if pl.HasActed {
+				continue
+			}
+			pl.HasActed = true
+			l.Unlock()
 			if pl.Bet >= l.MaxBet {
 				l.MaxBet = pl.Bet
 			} else {
 				pl.IsFold = true
 			}
-			pl.HasActed = true
 			for pl.IsFold {
 				pl = *l.PlayersRing.Next(1)
 			}
