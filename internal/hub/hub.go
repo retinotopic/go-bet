@@ -8,8 +8,8 @@ import (
 )
 
 type Hub struct {
-	Lobby      map[string]*lobby.Lobby
-	Player     map[string]*lobby.PlayUnit
+	Lobby      map[string]*lobby.Lobby    // url lobby
+	Player     map[string]*lobby.PlayUnit // id to player
 	ReqPlayers chan *lobby.PlayUnit
 	wg         sync.WaitGroup
 }
