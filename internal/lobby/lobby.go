@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"sync"
 	"time"
-
-	"github.com/chehsunliu/poker"
 )
 
 func NewLobby() *Lobby {
@@ -24,22 +22,16 @@ type top struct {
 	place  int
 	rating int32
 }
-type Lobby struct {
-	Deck *poker.Deck
-	PlayersRing
-	Admin      PlayUnit
-	Board      PlayUnit
-	SmallBlind int
-	MaxBet     int
-	TurnTicker *time.Ticker
-	BlindTimer *time.Timer
+type Lobby struct { //
+	PlayersRing //
+	Admin       PlayUnit
 	sync.Mutex
 	AdminOnce       sync.Once
 	PlayerCh        chan PlayUnit
 	StartGame       chan bool
 	PlayerBroadcast chan PlayUnit
 	IsRating        bool
-	LenPlayers      int
+	LenPlayers      int //
 }
 
 func (l *Lobby) LobbyWork() {
@@ -51,7 +43,8 @@ func (l *Lobby) LobbyWork() {
 				v.Conn.WriteJSON(x)
 			}
 		case <-l.StartGame:
-			l.Game()
+			game := Game{Lobby: l}
+			game.Game()
 		}
 	}
 }

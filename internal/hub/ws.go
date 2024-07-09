@@ -5,10 +5,13 @@ import (
 	"net/http"
 
 	"github.com/fasthttp/websocket"
+	"github.com/retinotopic/go-bet/internal/db"
 )
 
 type wsurl struct {
 	Url string `json:"url"`
+
+	db *db.PgClient
 }
 
 var upgrader = websocket.Upgrader{
