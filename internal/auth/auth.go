@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-	mproviders.m = make(map[string]provider.Provider)
+	Mproviders.m = make(map[string]provider.Provider)
 	google, err := google.New(os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), os.Getenv("REDIRECT"))
 	if err != nil {
 		log.Fatalln(err)
@@ -21,11 +21,11 @@ func init() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	mproviders.m["firebase"] = firebase
-	mproviders.m["google"] = google
+	Mproviders.m["firebase"] = firebase
+	Mproviders.m["google"] = google
 }
 
-var mproviders authprovider
+var Mproviders authprovider
 
 type authprovider struct {
 	m map[string]provider.Provider

@@ -32,6 +32,7 @@ type Lobby struct { //
 	PlayerBroadcast chan PlayUnit
 	IsRating        bool
 	LenPlayers      int //
+	Url             string
 }
 
 func (l *Lobby) LobbyWork() {
