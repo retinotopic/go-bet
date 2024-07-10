@@ -10,10 +10,6 @@ import (
 	"github.com/retinotopic/go-bet/internal/lobby"
 )
 
-type wsurl struct {
-	Url string `json:"url"`
-}
-
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
@@ -39,11 +35,12 @@ func (h *hubPump) FindGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pl, ok := h.Players[user_id]
-	if !ok {
+	if !ok || ok && len(pl.URLlobby) == 0 {
 		pl = &lobby.PlayUnit{User_id: user_id, Name: name, Conn: conn}
 		h.ReqPlayers <- pl
-	} else if ok && pl.CurrentLobby != nil {
-		pl.CurrentLobby.ConnHandle(pl)
+		// ping pong implementation here
+	} else if ok && len(pl.URLlobby) != 0 {
+		pl.Conn.WriteJSON(pl)
 	}
 
 }

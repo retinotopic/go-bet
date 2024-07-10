@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/retinotopic/go-bet/internal/lobby"
+	"github.com/retinotopic/go-bet/pkg/randfuncs"
 )
 
 func init() {
@@ -30,6 +31,16 @@ func (h *hubPump) greenReceive() {
 		plrs = append(plrs, cl)
 		if len(plrs) == 8 {
 			lb.Players = plrs
+			for _, v := range plrs {
+				h.PlrMutex.RLock()
+				h.Players[v.User_id] = v
+				h.PlrMutex.RUnlock()
+				v.Conn.WriteJSON(v)
+			}
+			h.LMutex.RLock()
+			url := randfuncs.RandomString(20, randfuncs.NewSource())
+			h.Lobby[url] = lb
+			h.LMutex.RUnlock()
 			lb.LobbyWork()
 			h.wg.Done()
 			return

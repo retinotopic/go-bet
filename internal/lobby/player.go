@@ -16,18 +16,18 @@ func (rs *PlayersRing) Next(offset int) *PlayUnit {
 }
 
 type PlayUnit struct {
-	User_id      int
-	Name         string `json:"Name"`
-	Bankroll     int    `json:"Bankroll"`
-	Bet          int    `json:"Bet"`
-	IsFold       bool   `json:"IsFold"`
-	HasActed     bool   `json:"HasActed"`
-	Conn         *websocket.Conn
-	Place        int          `json:"Place"`
-	Admin        bool         `json:"IsAdmin"`
-	Cards        []poker.Card `json:"Hand,omitempty"`
-	ValueSec     int          `json:"Time,omitempty"`
-	CurrentLobby *Lobby
+	User_id  int
+	Name     string `json:"Name"`
+	Bankroll int    `json:"Bankroll"`
+	Bet      int    `json:"Bet"`
+	IsFold   bool   `json:"IsFold"`
+	HasActed bool   `json:"HasActed"`
+	Conn     *websocket.Conn
+	Place    int          `json:"Place"`
+	Admin    bool         `json:"IsAdmin"`
+	Cards    []poker.Card `json:"Hand,omitempty"`
+	ValueSec int          `json:"Time,omitempty"`
+	URLlobby string
 }
 
 func (p PlayUnit) PrivateSend() PlayUnit {
