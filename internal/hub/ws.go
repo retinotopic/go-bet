@@ -5,13 +5,13 @@ import (
 	"net/http"
 
 	"github.com/fasthttp/websocket"
+	"github.com/retinotopic/go-bet/internal/auth"
 	"github.com/retinotopic/go-bet/internal/db"
+	"github.com/retinotopic/go-bet/internal/lobby"
 )
 
 type wsurl struct {
 	Url string `json:"url"`
-
-	db *db.PgClient
 }
 
 var upgrader = websocket.Upgrader{
@@ -19,11 +19,31 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 }
 
-func (h *Hub) FindGame(w http.ResponseWriter, r *http.Request) {
-	_, err := upgrader.Upgrade(w, r, nil)
+func (h *hubPump) FindGame(w http.ResponseWriter, r *http.Request) {
+	prvdr, err := auth.Mproviders.GetProvider(w, r)
+	if err != nil {
+		http.Error(w, "error retrieving user", 500)
+	}
+	sub, err := prvdr.FetchUser(w, r)
+	if err != nil {
+		http.Error(w, "error retrieving user", 500)
+	}
+	user_id, name, err := db.GetUser(sub)
+	if err != nil {
+		http.Error(w, "error retrieving user", 500)
+		return
+	}
+	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println(err)
 		return
+	}
+	pl, ok := h.Players[user_id]
+	if !ok {
+		pl = &lobby.PlayUnit{User_id: user_id, Name: name, Conn: conn}
+		h.ReqPlayers <- pl
+	} else if ok && pl.CurrentLobby != nil {
+		pl.CurrentLobby.ConnHandle(pl)
 	}
 
 }
