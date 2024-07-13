@@ -15,13 +15,13 @@ import (
 
 var Secretkey = []byte(os.Getenv("SECRET_KEY"))
 
-func WriteHashCookie(w http.ResponseWriter, key []byte) *http.Cookie {
+func WriteCookie(w http.ResponseWriter, key []byte) *http.Cookie {
 	mac := hmac.New(sha256.New, key)
 	r0 := rand.New(rand.NewSource(time.Now().Unix()))
 	time.Sleep(time.Millisecond * 25)
 	r1 := rand.New(rand.NewSource(time.Now().Unix()))
 	r1.Seed(time.Now().UnixNano())
-	cookie := &http.Cookie{Name: randfuncs.RandomString(15, r0), Value: randfuncs.RandomString(20, r1), Secure: true, Path: "/"}
+	cookie := &http.Cookie{Name: randfuncs.RandomString(10, r0), Value: randfuncs.RandomString(20, r1), Secure: true, Path: "/"}
 	mac.Write([]byte(cookie.Name))
 	mac.Write([]byte(cookie.Value))
 	signature := base64.StdEncoding.EncodeToString(mac.Sum(nil))
@@ -29,11 +29,7 @@ func WriteHashCookie(w http.ResponseWriter, key []byte) *http.Cookie {
 	http.SetCookie(w, cookie)
 	return cookie
 }
-func ReadHashCookie(r *http.Request, key []byte, cookies []*http.Cookie) (*http.Cookie, error) {
-	if len(cookies) == 0 {
-		return nil, errors.New("zero cookies")
-	}
-	c := cookies[0]
+func ReadCookie(key []byte, c *http.Cookie) (string, error) {
 	name := c.Name
 	valueHash := c.Value
 	signature := valueHash[20:]
@@ -44,7 +40,7 @@ func ReadHashCookie(r *http.Request, key []byte, cookies []*http.Cookie) (*http.
 	mac.Write([]byte(value))
 	expectedSignature := base64.StdEncoding.EncodeToString(mac.Sum(nil))
 	if !hmac.Equal([]byte(signature), []byte(expectedSignature)) {
-		return nil, errors.New("ValidationErr")
+		return "", errors.New("ValidationErr")
 	}
-	return c, nil
+	return c.Name, nil
 }
