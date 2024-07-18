@@ -70,9 +70,11 @@ func (g *Game) Game() {
 				case flop: // preflop to flop
 					flopcard := g.Deck.Draw(3)
 					g.Board.Cards = append(g.Board.Cards, flopcard...)
+					g.PlayerBroadcast <- g.Board
 				case turn, river: // flop to turn, turn to river
 					flopcard := g.Deck.Draw(1)
 					g.Board.Cards = append(g.Board.Cards, flopcard[0])
+					g.PlayerBroadcast <- g.Board
 				case postriver:
 					g.PostRiver()
 					stages = -1
@@ -99,14 +101,13 @@ func (g *Game) PostRiver() {
 			elims = append(elims, v)
 		}
 	}
-	if len(elims) != 0 {
-		g.CalcRating(elims, last)
-	}
 	if len(newPlayers) == 1 {
 		g.CalcRating(newPlayers, 1)
 		return
+	} else if len(elims) != 0 {
+		g.CalcRating(elims, last)
+		g.Players = newPlayers
 	}
-	g.Players = newPlayers
 	g.DealNewHand()
 }
 
@@ -163,5 +164,7 @@ func (g *Game) CalcRating(plr []*PlayUnit, place int) {
 		if err != nil {
 			queue.Queue.PublishTask(data)
 		}
+		plr.Conn.WriteJSON(plr)
+		plr.Conn.Close()
 	}
 }
