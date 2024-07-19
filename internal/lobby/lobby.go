@@ -46,6 +46,7 @@ func (l *Lobby) LobbyWork() {
 		case <-l.StartGame:
 			game := Game{Lobby: l}
 			game.Game()
+			return
 		}
 	}
 }

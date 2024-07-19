@@ -76,7 +76,9 @@ func (g *Game) Game() {
 					g.Board.Cards = append(g.Board.Cards, flopcard[0])
 					g.PlayerBroadcast <- g.Board
 				case postriver:
-					g.PostRiver()
+					if ok := g.PostRiver(); ok {
+						return
+					}
 					stages = -1
 				}
 				for _, v := range g.Players {
@@ -88,7 +90,7 @@ func (g *Game) Game() {
 		}
 	}
 }
-func (g *Game) PostRiver() {
+func (g *Game) PostRiver() (gameOver bool) {
 	g.CalcWinners()
 	newPlayers := make([]*PlayUnit, 0, 8)
 	elims := make([]*PlayUnit, 0, 8)
@@ -103,12 +105,13 @@ func (g *Game) PostRiver() {
 	}
 	if len(newPlayers) == 1 {
 		g.CalcRating(newPlayers, 1)
-		return
+		return true
 	} else if len(elims) != 0 {
 		g.CalcRating(elims, last)
 		g.Players = newPlayers
 	}
 	g.DealNewHand()
+	return
 }
 
 func (g *Game) DealNewHand() {
