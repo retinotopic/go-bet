@@ -5,37 +5,40 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
-	"math/rand"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
-	"github.com/retinotopic/pokerGO/pkg/randfuncs"
+	"github.com/google/uuid"
 )
 
-var Secretkey = []byte(os.Getenv("SECRET_KEY"))
+var secret = []byte(os.Getenv("SECRET_KEY"))
 
-func WriteCookie(w http.ResponseWriter, key []byte) *http.Cookie {
-	mac := hmac.New(sha256.New, key)
-	r0 := rand.New(rand.NewSource(time.Now().Unix()))
-	time.Sleep(time.Millisecond * 25)
-	r1 := rand.New(rand.NewSource(time.Now().Unix()))
-	r1.Seed(time.Now().UnixNano())
-	cookie := &http.Cookie{Name: randfuncs.RandomString(10, r0), Value: randfuncs.RandomString(20, r1), Secure: true, Path: "/"}
-	mac.Write([]byte(cookie.Name))
-	mac.Write([]byte(cookie.Value))
+func WriteCookie(w http.ResponseWriter) *http.Cookie {
+	mac := hmac.New(sha256.New, secret)
+	value := uuid.New().String()
+	name := strconv.Itoa(int(time.Now().Unix()))
+	cookie := &http.Cookie{Secure: true, Path: "/", HttpOnly: true}
+	mac.Write([]byte(name))
+	mac.Write([]byte(value))
 	signature := base64.StdEncoding.EncodeToString(mac.Sum(nil))
-	cookie.Value = cookie.Value + signature
+	cookie.Value = value + signature
 	http.SetCookie(w, cookie)
 	return cookie
 }
-func ReadCookie(key []byte, c *http.Cookie) (string, error) {
+func ReadCookie(r *http.Request) (string, error) {
+	c, err := CookiesByPrefix(r, "guest")
+	if err != nil {
+		return "", err
+	}
 	name := c.Name
 	valueHash := c.Value
-	signature := valueHash[20:]
-	value := valueHash[:20]
+	signature := valueHash[36:]
+	value := valueHash[:36]
 
-	mac := hmac.New(sha256.New, key)
+	mac := hmac.New(sha256.New, secret)
 	mac.Write([]byte(name))
 	mac.Write([]byte(value))
 	expectedSignature := base64.StdEncoding.EncodeToString(mac.Sum(nil))
@@ -43,4 +46,27 @@ func ReadCookie(key []byte, c *http.Cookie) (string, error) {
 		return "", errors.New("ValidationErr")
 	}
 	return c.Name, nil
+}
+func CookiesByPrefix(r *http.Request, prefix string) (*http.Cookie, error) {
+	var matchingCookies []*http.Cookie
+	cookieHeaders, ok := r.Header["Cookie"]
+	if !ok || len(cookieHeaders) == 0 {
+		return nil, http.ErrNoCookie
+	}
+	cookiePairs := strings.Split(cookieHeaders[0], ";")
+	for _, cookiePair := range cookiePairs {
+		cookiePair = strings.TrimSpace(cookiePair)
+		if strings.HasPrefix(cookiePair, prefix) {
+			parts := strings.SplitN(cookiePair, "=", 2)
+			if len(parts) == 2 {
+				cookie := &http.Cookie{
+					Name:  parts[0],
+					Value: parts[1],
+				}
+				matchingCookies = append(matchingCookies, cookie)
+			}
+		}
+	}
+
+	return matchingCookies[0], nil
 }

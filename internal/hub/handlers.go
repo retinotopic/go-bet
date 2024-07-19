@@ -3,6 +3,7 @@ package hub
 import (
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/fasthttp/websocket"
@@ -59,18 +60,31 @@ func (h *hubPump) FindGame(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func (h *hubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
+	var user_id int
+	var name string
 	prvdr, err := auth.Mproviders.GetProvider(w, r)
 	if err != nil {
-		http.Error(w, "error retrieving user", 500)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
 	sub, err := prvdr.FetchUser(w, r)
 	if err != nil {
-		http.Error(w, "error retrieving user", 500)
-	}
-	user_id, name, err := db.GetUser(sub)
-	if err != nil {
-		http.Error(w, "error retrieving user", 500)
-		return
+		name, err = auth.ReadCookie(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		user_id, err = strconv.Atoi(name[5:])
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+	} else {
+		user_id, name, err = db.GetUser(sub)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
