@@ -20,37 +20,37 @@ var upgrader = websocket.Upgrader{
 func (h *hubPump) FindGame(w http.ResponseWriter, r *http.Request) {
 	prvdr, err := auth.Mproviders.GetProvider(w, r)
 	if err != nil {
-		http.Error(w, "error retrieving user", 500)
-	}
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Println(err)
-		return
+		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
 	sub, err := prvdr.FetchUser(w, r)
 	if err != nil {
-		http.Error(w, "error retrieving user", 500)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
 	user_id, name, err := db.GetUser(sub)
 	if err != nil {
-		http.Error(w, "error retrieving user", 500)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	h.PlrMutex.RLock()
-	pl, ok := h.Players[user_id]
+	pl, ok := h.Players[strconv.Itoa(user_id)]
 	h.PlrMutex.RUnlock()
 
 	if !ok || ok && len(pl.URLlobby) == 0 {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			log.Println(err)
+			return
+		}
 		pl = &lobby.PlayUnit{User_id: user_id, Name: name, Conn: conn}
 		h.ReqPlayers <- pl
 		h.keepAlive(conn, time.Second*15)
 
 		pl = &lobby.PlayUnit{}
-		err := conn.ReadJSON(pl)
+		err = conn.ReadJSON(pl)
 		if err != nil {
 			log.Println(err)
 		}
-		conn.Close()
+		err = conn.Close()
 		if err != nil {
 			log.Println(err)
 		}
@@ -73,11 +73,6 @@ func (h *hubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		user_id, err = strconv.Atoi(name[5:])
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
 
 	} else {
 		user_id, name, err = db.GetUser(sub)
@@ -91,18 +86,29 @@ func (h *hubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 		log.Println(err)
 		return
 	}
+
+	//check for player presence in map
 	h.PlrMutex.RLock()
-	pl, ok := h.Players[user_id]
+	pl := h.Players[strconv.Itoa(user_id)]
 	h.PlrMutex.RUnlock()
 
 	wsurl := r.URL.Path[7:]
-	if wsurl == pl.URLlobby && ok {
+
+	//check for lobby presence in map
+	h.LMutex.RLock()
+	lb, ok := h.Lobby[wsurl]
+	h.LMutex.RUnlock()
+
+	if ok && ((lb.IsRating && pl.IsRating && wsurl == pl.URLlobby) || (!pl.IsRating && !lb.IsRating && !lb.HasBegun.Load())) {
 		pl.Conn = conn
 		pl.Name = name
 		pl.Conn.WriteJSON(pl)
 		h.LMutex.RLock()
-		h.Lobby[pl.URLlobby].ConnHandle(pl)
+		if h.Lobby[pl.URLlobby] != nil {
+			h.Lobby[pl.URLlobby].ConnHandle(pl)
+		}
 		h.LMutex.Unlock()
+
 	} else {
 		conn.Close()
 	}

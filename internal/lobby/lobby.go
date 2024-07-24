@@ -3,6 +3,7 @@ package lobby
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -32,6 +33,7 @@ type Lobby struct { //
 	PlayerBroadcast chan PlayUnit
 	IsRating        bool
 	LenPlayers      int //
+	HasBegun        atomic.Bool
 	Url             string
 }
 
@@ -44,7 +46,9 @@ func (l *Lobby) LobbyWork() {
 				v.Conn.WriteJSON(x)
 			}
 		case <-l.StartGame:
+			close(l.StartGame)
 			game := Game{Lobby: l}
+			l.HasBegun.Store(true)
 			game.Game()
 			return
 		}

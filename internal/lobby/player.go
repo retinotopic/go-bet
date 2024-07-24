@@ -17,7 +17,7 @@ func (rs *PlayersRing) Next(offset int) *PlayUnit {
 
 type PlayUnit struct {
 	User_id  int    `json:"UserId"`
-	Guest    bool   `json:"Guest"`
+	IsRating bool   `json:"IsRating"`
 	Rating   int    `json:"Rating"`
 	Name     string `json:"Name"`
 	Bankroll int    `json:"Bankroll"`

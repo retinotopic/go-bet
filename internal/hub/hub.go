@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"strconv"
 	"sync"
 	"time"
 
@@ -18,7 +19,7 @@ var Hub hubPump
 type hubPump struct {
 	Lobby      map[string]*lobby.Lobby // url lobby
 	LMutex     sync.RWMutex
-	Players    map[int]*lobby.PlayUnit // id to player
+	Players    map[string]*lobby.PlayUnit // id to player
 	PlrMutex   sync.RWMutex
 	ReqPlayers chan *lobby.PlayUnit
 	wg         sync.WaitGroup
@@ -31,17 +32,25 @@ func (h *hubPump) greenReceive() {
 		plrs = append(plrs, cl)
 		if len(plrs) == 8 {
 			lb.Players = plrs
-			for _, v := range plrs {
-				h.PlrMutex.RLock()
-				h.Players[v.User_id] = v
-				h.PlrMutex.RUnlock()
-				v.Conn.WriteJSON(v)
-			}
-			h.LMutex.RLock()
 			url := randfuncs.RandomString(20, randfuncs.NewSource())
+			for _, v := range plrs {
+				v.URLlobby = url
+
+				h.PlrMutex.Lock()
+				h.Players[strconv.Itoa(v.User_id)] = v
+				h.PlrMutex.Unlock()
+
+				err := v.Conn.WriteJSON(v)
+				if err != nil {
+					v.Conn.WriteJSON(v)
+				}
+			}
+
+			h.LMutex.Lock()
 			h.Lobby[url] = lb
-			h.LMutex.RUnlock()
-			lb.LobbyWork()
+			h.LMutex.Unlock()
+
+			go lb.LobbyWork()
 			h.wg.Done()
 			return
 		}

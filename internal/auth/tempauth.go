@@ -7,11 +7,11 @@ import (
 	"errors"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
-	"time"
 
+	"github.com/anandvarma/namegen"
 	"github.com/google/uuid"
+	"github.com/retinotopic/go-bet/pkg/randfuncs"
 )
 
 var secret = []byte(os.Getenv("SECRET_KEY"))
@@ -19,12 +19,14 @@ var secret = []byte(os.Getenv("SECRET_KEY"))
 func WriteCookie(w http.ResponseWriter) *http.Cookie {
 	mac := hmac.New(sha256.New, secret)
 	value := uuid.New().String()
-	name := strconv.Itoa(int(time.Now().Unix()))
+	ng := namegen.New()
+	name := ng.GetForId(randfuncs.NewSource().Int63())
 	cookie := &http.Cookie{Secure: true, Path: "/", HttpOnly: true}
 	mac.Write([]byte(name))
 	mac.Write([]byte(value))
 	signature := base64.StdEncoding.EncodeToString(mac.Sum(nil))
 	cookie.Value = value + signature
+	cookie.Name = "guest" + name
 	http.SetCookie(w, cookie)
 	return cookie
 }
@@ -45,7 +47,7 @@ func ReadCookie(r *http.Request) (string, error) {
 	if !hmac.Equal([]byte(signature), []byte(expectedSignature)) {
 		return "", errors.New("ValidationErr")
 	}
-	return c.Name, nil
+	return c.Name[5:], nil
 }
 func CookiesByPrefix(r *http.Request, prefix string) (*http.Cookie, error) {
 	var matchingCookies []*http.Cookie
