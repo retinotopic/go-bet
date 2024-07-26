@@ -61,7 +61,7 @@ func (h *hubPump) FindGame(w http.ResponseWriter, r *http.Request) {
 }
 func (h *hubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 	var user_id int
-	var name string
+	var name, ident string
 	prvdr, err := auth.Mproviders.GetProvider(w, r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -69,6 +69,7 @@ func (h *hubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 	sub, err := prvdr.FetchUser(w, r)
 	if err != nil {
 		name, err = auth.ReadCookie(r)
+		ident = name
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -76,6 +77,7 @@ func (h *hubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 
 	} else {
 		user_id, name, err = db.GetUser(sub)
+		ident = strconv.Itoa(user_id)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -89,7 +91,7 @@ func (h *hubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 
 	//check for player presence in map
 	h.PlrMutex.RLock()
-	pl := h.Players[strconv.Itoa(user_id)]
+	pl := h.Players[ident]
 	h.PlrMutex.RUnlock()
 
 	wsurl := r.URL.Path[7:]
@@ -101,11 +103,13 @@ func (h *hubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 
 	if ok && ((lb.IsRating && pl.IsRating && wsurl == pl.URLlobby) || (!pl.IsRating && !lb.IsRating && !lb.HasBegun.Load())) {
 		pl.Conn = conn
+		pl.User_id = user_id
 		pl.Name = name
 		pl.Conn.WriteJSON(pl)
 		h.LMutex.RLock()
 		if h.Lobby[pl.URLlobby] != nil {
 			h.Lobby[pl.URLlobby].ConnHandle(pl)
+			go h.keepAlive(pl.Conn, time.Second*20)
 		}
 		h.LMutex.Unlock()
 
