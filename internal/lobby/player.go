@@ -29,7 +29,7 @@ type PlayUnit struct {
 	Admin    bool         `json:"IsAdmin"`
 	Cards    []poker.Card `json:"Hand,omitempty"`
 	ValueSec int          `json:"Time,omitempty"`
-	URLlobby string
+	URLlobby uint64
 }
 
 func (p PlayUnit) PrivateSend() PlayUnit {

@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"hash/maphash"
 	"log"
 	"net/http"
 	"strconv"
@@ -11,7 +12,6 @@ import (
 	"github.com/retinotopic/go-bet/internal/auth"
 	"github.com/retinotopic/go-bet/internal/db"
 	"github.com/retinotopic/go-bet/internal/lobby"
-	"github.com/retinotopic/go-bet/pkg/randfuncs"
 )
 
 var upgrader = websocket.Upgrader{
@@ -37,7 +37,7 @@ func (h *hubPump) FindGame(w http.ResponseWriter, r *http.Request) {
 	pl, ok := h.Players[strconv.Itoa(user_id)]
 	h.PlrMutex.RUnlock()
 
-	if !ok || ok && len(pl.URLlobby) == 0 {
+	if !ok || ok && pl.URLlobby == 0 {
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			log.Println(err)
@@ -72,11 +72,12 @@ func (h *hubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		name, err = auth.ReadCookie(r)
 		if err != nil {
+			name = namegen.New().GetForId(int64(new(maphash.Hash).Sum64()))
 			h.PlrMutex.Lock()
 			for h.Players[name] != nil {
-				ng := namegen.New()
-				name = ng.GetForId(randfuncs.NewSource().Int63())
+				name = namegen.New().GetForId(int64(new(maphash.Hash).Sum64()))
 			}
+			h.Players[name] = &lobby.PlayUnit{Name: name}
 			h.PlrMutex.Unlock()
 		}
 		ident = name
@@ -94,17 +95,21 @@ func (h *hubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 	pl, ok := h.Players[ident]
 	h.PlrMutex.RUnlock()
 
-	wsurl := r.URL.Path[7:]
+	wsurl, err := strconv.ParseUint(r.URL.Path[7:], 10, 0)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	}
+
 	if !ok {
 		pl = &lobby.PlayUnit{User_id: user_id, Name: name}
 	}
 
-	if pl.URLlobby == wsurl || len(pl.URLlobby) == 0 {
+	if pl.URLlobby == wsurl || pl.URLlobby == 0 {
 		h.LMutex.RLock()
 		lb, ok := h.Lobby[wsurl]
 		h.LMutex.RUnlock()
 
-		if len(pl.URLlobby) == 0 && (lb.IsRating || lb.HasBegun.Load()) {
+		if pl.URLlobby == 0 && (lb.IsRating || lb.HasBegun.Load()) {
 			http.Error(w, "custom game has already started", http.StatusNotFound)
 			return
 		}

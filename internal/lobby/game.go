@@ -1,13 +1,14 @@
 package lobby
 
 import (
+	"hash/maphash"
 	"math"
+	"math/rand"
 	"sort"
 	"time"
 
 	"github.com/chehsunliu/poker"
 	"github.com/retinotopic/go-bet/internal/queue"
-	"github.com/retinotopic/go-bet/pkg/randfuncs"
 )
 
 type Game struct {
@@ -41,7 +42,7 @@ func (g *Game) tickerTillNextTurn() {
 }
 func (g *Game) Game() {
 	var stages int
-	randfuncs.NewSource().Shuffle(g.LenPlayers, func(i, j int) {
+	rand.New(rand.NewSource(int64(new(maphash.Hash).Sum64()))).Shuffle(g.LenPlayers, func(i, j int) {
 		g.Players[i], g.Players[j] = g.Players[j], g.Players[i]
 	})
 	g.PlayerBroadcast = make(chan PlayUnit)

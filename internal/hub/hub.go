@@ -1,12 +1,12 @@
 package hub
 
 import (
+	"hash/maphash"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/retinotopic/go-bet/internal/lobby"
-	"github.com/retinotopic/go-bet/pkg/randfuncs"
 )
 
 func init() {
@@ -17,7 +17,7 @@ func init() {
 var Hub hubPump
 
 type hubPump struct {
-	Lobby      map[string]*lobby.Lobby // url lobby
+	Lobby      map[uint64]*lobby.Lobby // url lobby
 	LMutex     sync.RWMutex
 	Players    map[string]*lobby.PlayUnit // id to player
 	PlrMutex   sync.RWMutex
@@ -32,7 +32,7 @@ func (h *hubPump) greenReceive() {
 		plrs = append(plrs, cl)
 		if len(plrs) == 8 {
 			lb.Players = plrs
-			url := randfuncs.RandomString(20, randfuncs.NewSource())
+			url := new(maphash.Hash).Sum64()
 			for _, v := range plrs {
 				v.URLlobby = url
 
