@@ -6,10 +6,12 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/anandvarma/namegen"
 	"github.com/fasthttp/websocket"
 	"github.com/retinotopic/go-bet/internal/auth"
 	"github.com/retinotopic/go-bet/internal/db"
 	"github.com/retinotopic/go-bet/internal/lobby"
+	"github.com/retinotopic/go-bet/pkg/randfuncs"
 )
 
 var upgrader = websocket.Upgrader{
@@ -69,11 +71,15 @@ func (h *hubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 	sub, err := prvdr.FetchUser(w, r)
 	if err != nil {
 		name, err = auth.ReadCookie(r)
-		ident = name
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
+			h.PlrMutex.Lock()
+			for h.Players[name] != nil {
+				ng := namegen.New()
+				name = ng.GetForId(randfuncs.NewSource().Int63())
+			}
+			h.PlrMutex.Unlock()
 		}
+		ident = name
 
 	} else {
 		user_id, name, err = db.GetUser(sub)

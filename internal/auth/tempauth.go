@@ -9,18 +9,14 @@ import (
 	"os"
 	"strings"
 
-	"github.com/anandvarma/namegen"
 	"github.com/google/uuid"
-	"github.com/retinotopic/go-bet/pkg/randfuncs"
 )
 
 var secret = []byte(os.Getenv("SECRET_KEY"))
 
-func WriteCookie(w http.ResponseWriter) *http.Cookie {
+func WriteCookie(w http.ResponseWriter, name string) *http.Cookie {
 	mac := hmac.New(sha256.New, secret)
 	value := uuid.New().String()
-	ng := namegen.New()
-	name := ng.GetForId(randfuncs.NewSource().Int63())
 	cookie := &http.Cookie{Secure: true, Path: "/", HttpOnly: true}
 	mac.Write([]byte(name))
 	mac.Write([]byte(value))
