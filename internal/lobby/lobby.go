@@ -30,6 +30,7 @@ type Lobby struct { //
 	AdminOnce       sync.Once
 	PlayerCh        chan PlayUnit
 	StartGame       chan bool
+	GameOver        atomic.Bool
 	PlayerBroadcast chan PlayUnit
 	IsRating        bool
 	LenPlayers      int //
@@ -50,6 +51,7 @@ func (l *Lobby) LobbyWork() {
 			game := Game{Lobby: l}
 			l.HasBegun.Store(true)
 			game.Game()
+			l.GameOver.Store(true)
 			return
 		}
 	}

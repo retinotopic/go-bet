@@ -55,8 +55,8 @@ func (h *hubPump) FindGame(w http.ResponseWriter, r *http.Request) {
 			log.Println(err)
 		}
 
-	} else if ok && len(pl.URLlobby) != 0 {
-		pl.Conn.WriteJSON(pl)
+	} else {
+		http.Error(w, "user not found", http.StatusUnauthorized)
 	}
 }
 func (h *hubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
@@ -83,41 +83,41 @@ func (h *hubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-
 	//check for player presence in map
 	h.PlrMutex.RLock()
-	pl := h.Players[ident]
+	pl, ok := h.Players[ident]
 	h.PlrMutex.RUnlock()
 
 	wsurl := r.URL.Path[7:]
-
-	//check for lobby presence in map
-	h.LMutex.RLock()
-	lb, ok := h.Lobby[wsurl]
-	h.LMutex.RUnlock()
-
-	if ok && ((lb.IsRating && pl.IsRating && wsurl == pl.URLlobby) || (!pl.IsRating && !lb.IsRating && !lb.HasBegun.Load())) {
-		pl.Conn = conn
-		pl.User_id = user_id
-		pl.Name = name
-		pl.Conn.WriteJSON(pl)
-		h.LMutex.RLock()
-		if h.Lobby[pl.URLlobby] != nil {
-			h.Lobby[pl.URLlobby].ConnHandle(pl)
-			go h.keepAlive(pl.Conn, time.Second*20)
-		}
-		h.LMutex.Unlock()
-
-	} else {
-		conn.Close()
+	if !ok {
+		pl = &lobby.PlayUnit{User_id: user_id, Name: name}
 	}
 
+	if pl.URLlobby == wsurl || len(pl.URLlobby) == 0 {
+		h.LMutex.RLock()
+		lb, ok := h.Lobby[wsurl]
+		h.LMutex.RUnlock()
+
+		if len(pl.URLlobby) == 0 && (lb.IsRating || lb.HasBegun.Load()) {
+			http.Error(w, "custom game has already started", http.StatusNotFound)
+			return
+		}
+		if ok {
+			conn, err := upgrader.Upgrade(w, r, nil)
+			if err != nil {
+				log.Println(err)
+				return
+			}
+			pl.Conn = conn
+			go h.keepAlive(pl.Conn, time.Second*20)
+			lb.ConnHandle(pl)
+		}
+
+	} else {
+		http.Error(w, "lobby not found", http.StatusNotFound)
+	}
 }
+
 func (h *hubPump) keepAlive(c *websocket.Conn, timeout time.Duration) {
 	lastResponse := time.Now()
 	c.SetPongHandler(func(msg string) error {

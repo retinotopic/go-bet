@@ -159,6 +159,9 @@ func (g *Game) CalcWinners() {
 	}
 }
 func (g *Game) CalcRating(plr []*PlayUnit, place int) {
+	if !g.IsRating {
+		return
+	}
 	baseChange := 30
 	middlePlace := float64(g.LenPlayers+1) / 2
 	for _, plr := range plr {
