@@ -50,7 +50,12 @@ func (h *hubPump) greenReceive() {
 			h.Lobby[url] = lb
 			h.LMutex.Unlock()
 
-			go lb.LobbyWork()
+			go func() {
+				lb.LobbyWork()
+				h.LMutex.Lock()
+				delete(h.Lobby, url)
+				h.LMutex.Unlock()
+			}()
 			h.wg.Done()
 			return
 		}

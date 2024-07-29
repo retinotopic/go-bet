@@ -64,3 +64,17 @@ func (a authprovider) GetProvider(w http.ResponseWriter, r *http.Request) (provi
 	}
 	return nil, errors.New("no such provider")
 }
+func (a authprovider) BeginAuth(w http.ResponseWriter, r *http.Request) {
+	prvdr, err := a.GetProvider(w, r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	}
+	prvdr.BeginAuth(w, r)
+}
+func (a authprovider) CompleteAuth(w http.ResponseWriter, r *http.Request) {
+	prvdr, err := a.GetProvider(w, r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	}
+	prvdr.CompleteAuth(w, r)
+}

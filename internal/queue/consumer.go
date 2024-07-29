@@ -49,5 +49,4 @@ func (t *TaskQueue) ProcessConsume() {
 		}
 		msg.Ack(false)
 	}
-
 }

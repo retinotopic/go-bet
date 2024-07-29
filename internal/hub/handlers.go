@@ -113,6 +113,19 @@ func (h *hubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "custom game has already started", http.StatusNotFound)
 			return
 		}
+		if pl.URLlobby == 0 && !ok {
+			lb = lobby.NewLobby()
+			h.LMutex.Lock()
+			h.Lobby[wsurl] = lb
+			h.LMutex.Unlock()
+			go func() {
+				lb.LobbyWork()
+				h.LMutex.Lock()
+				delete(h.Lobby, wsurl)
+				h.LMutex.Unlock()
+			}()
+			ok = !ok
+		}
 		if ok {
 			conn, err := upgrader.Upgrade(w, r, nil)
 			if err != nil {
@@ -121,7 +134,7 @@ func (h *hubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 			}
 			pl.Conn = conn
 			go h.keepAlive(pl.Conn, time.Second*20)
-			lb.ConnHandle(pl)
+			go lb.ConnHandle(pl)
 		}
 
 	} else {
