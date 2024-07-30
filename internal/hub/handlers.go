@@ -1,17 +1,14 @@
 package hub
 
 import (
-	"hash/maphash"
 	"log"
 	"net/http"
 	"strconv"
 	"time"
 
-	"github.com/anandvarma/namegen"
 	"github.com/fasthttp/websocket"
-	"github.com/retinotopic/go-bet/internal/auth"
-	"github.com/retinotopic/go-bet/internal/db"
 	"github.com/retinotopic/go-bet/internal/lobby"
+	"github.com/retinotopic/go-bet/internal/middleware"
 )
 
 var upgrader = websocket.Upgrader{
@@ -20,21 +17,12 @@ var upgrader = websocket.Upgrader{
 }
 
 func (h *hubPump) FindGame(w http.ResponseWriter, r *http.Request) {
-	prvdr, err := auth.Mproviders.GetProvider(w, r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-	}
-	sub, err := prvdr.FetchUser(w, r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-	}
-	user_id, name, err := db.GetUser(sub)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+	idents := middleware.GetUser(r.Context())
+	if idents.User_id == 0 {
+		http.Error(w, "user not found", http.StatusUnauthorized)
 	}
 	h.PlrMutex.RLock()
-	pl, ok := h.Players[strconv.Itoa(user_id)]
+	pl, ok := h.Players[idents.Ident]
 	h.PlrMutex.RUnlock()
 
 	if !ok || ok && pl.URLlobby == 0 {
@@ -43,7 +31,7 @@ func (h *hubPump) FindGame(w http.ResponseWriter, r *http.Request) {
 			log.Println(err)
 			return
 		}
-		pl = &lobby.PlayUnit{User_id: user_id, Name: name, Conn: conn}
+		pl = &lobby.PlayUnit{User_id: idents.User_id, Name: idents.Name, Conn: conn}
 		h.ReqPlayers <- pl
 		h.keepAlive(conn, time.Second*15)
 
@@ -62,37 +50,10 @@ func (h *hubPump) FindGame(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func (h *hubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
-	var user_id int
-	var name, ident string
-	prvdr, err := auth.Mproviders.GetProvider(w, r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-	}
-	sub, err := prvdr.FetchUser(w, r)
-	if err != nil {
-		name, err = auth.ReadCookie(r)
-		if err != nil {
-			name = namegen.New().GetForId(int64(new(maphash.Hash).Sum64()))
-			h.PlrMutex.Lock()
-			for h.Players[name] != nil {
-				name = namegen.New().GetForId(int64(new(maphash.Hash).Sum64()))
-			}
-			h.Players[name] = &lobby.PlayUnit{Name: name}
-			h.PlrMutex.Unlock()
-		}
-		ident = name
-
-	} else {
-		user_id, name, err = db.GetUser(sub)
-		ident = strconv.Itoa(user_id)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-	}
 	//check for player presence in map
+	idents := middleware.GetUser(r.Context())
 	h.PlrMutex.RLock()
-	pl, ok := h.Players[ident]
+	pl, ok := h.Players[idents.Ident]
 	h.PlrMutex.RUnlock()
 
 	wsurl, err := strconv.ParseUint(r.URL.Path[7:], 10, 0)
@@ -101,7 +62,7 @@ func (h *hubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !ok {
-		pl = &lobby.PlayUnit{User_id: user_id, Name: name}
+		pl = &lobby.PlayUnit{User_id: idents.User_id, Name: idents.Name}
 	}
 
 	if pl.URLlobby == wsurl || pl.URLlobby == 0 {
