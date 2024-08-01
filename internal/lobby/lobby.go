@@ -5,6 +5,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/retinotopic/go-bet/internal/queue"
 )
 
 func NewLobby() *Lobby {
@@ -36,6 +38,7 @@ type Lobby struct { //
 	LenPlayers      int //
 	HasBegun        atomic.Bool
 	Url             string
+	Queue           *queue.TaskQueue
 }
 
 func (l *Lobby) LobbyWork() {

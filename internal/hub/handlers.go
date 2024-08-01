@@ -16,7 +16,7 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 }
 
-func (h *hubPump) FindGame(w http.ResponseWriter, r *http.Request) {
+func (h *HubPump) FindGame(w http.ResponseWriter, r *http.Request) {
 	idents := middleware.GetUser(r.Context())
 	if idents.User_id == 0 {
 		http.Error(w, "user not found", http.StatusUnauthorized)
@@ -49,7 +49,7 @@ func (h *hubPump) FindGame(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "user not found", http.StatusUnauthorized)
 	}
 }
-func (h *hubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
+func (h *HubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 	//check for player presence in map
 	idents := middleware.GetUser(r.Context())
 	h.PlrMutex.RLock()
@@ -103,7 +103,7 @@ func (h *hubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *hubPump) keepAlive(c *websocket.Conn, timeout time.Duration) {
+func (h *HubPump) keepAlive(c *websocket.Conn, timeout time.Duration) {
 	lastResponse := time.Now()
 	c.SetPongHandler(func(msg string) error {
 		lastResponse = time.Now()

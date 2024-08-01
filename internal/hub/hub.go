@@ -7,25 +7,26 @@ import (
 	"time"
 
 	"github.com/retinotopic/go-bet/internal/lobby"
+	"github.com/retinotopic/go-bet/internal/queue"
 )
 
-func init() {
-	Hub = hubPump{ReqPlayers: make(chan *lobby.PlayUnit, 1250)}
-	Hub.requests()
+func NewPump(lenBuffer int) *HubPump {
+	hub := &HubPump{ReqPlayers: make(chan *lobby.PlayUnit, lenBuffer)}
+	hub.requests()
+	return hub
 }
 
-var Hub hubPump
-
-type hubPump struct {
+type HubPump struct {
 	Lobby      map[uint64]*lobby.Lobby // url lobby
 	LMutex     sync.RWMutex
 	Players    map[string]*lobby.PlayUnit // id to player
 	PlrMutex   sync.RWMutex
 	ReqPlayers chan *lobby.PlayUnit
 	wg         sync.WaitGroup
+	Queue      *queue.TaskQueue
 }
 
-func (h *hubPump) greenReceive() {
+func (h *HubPump) greenReceive() {
 	plrs := make([]*lobby.PlayUnit, 0, 8)
 	lb := lobby.NewLobby()
 	for cl := range h.ReqPlayers {
@@ -61,7 +62,7 @@ func (h *hubPump) greenReceive() {
 		}
 	}
 }
-func (h *hubPump) requests() {
+func (h *HubPump) requests() {
 	t := time.NewTicker(time.Millisecond * 25)
 	t1 := time.NewTimer(time.Second * 30)
 	for {

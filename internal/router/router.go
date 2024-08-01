@@ -24,9 +24,11 @@ func (r *Router) Run() error {
 	if err != nil {
 		return err
 	}
+	hub := hub.NewPump(1250)
 	mux := http.NewServeMux()
-	mux.HandleFunc("/lobby", hub.Hub.ConnectLobby)
-	mux.HandleFunc("/findgame", hub.Hub.FindGame)
+
+	mux.HandleFunc("/lobby", hub.ConnectLobby)
+	mux.HandleFunc("/findgame", hub.FindGame)
 	mux.HandleFunc("/beginauth", auth.Mproviders.BeginAuth)
 	mux.HandleFunc("/completeauth", auth.Mproviders.CompleteAuth)
 	err = http.ListenAndServe(r.Addr, mux)
