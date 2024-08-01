@@ -1,60 +1,75 @@
 package queue
 
 import (
-	"log"
-	"os"
-
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-type TaskQueue struct {
-	Conn    *amqp.Connection
-	Ch      *amqp.Channel
-	Consume <-chan amqp.Delivery
-	Queue   amqp.Queue
+type QueueDeclare struct {
+	Name       string     `json:"name"`
+	Durable    bool       `json:"durable"`
+	AutoDelete bool       `json:"autoDelete"`
+	Exclusive  bool       `json:"exclusive"`
+	NoWait     bool       `json:"noWait"`
+	Args       amqp.Table `json:"args"`
 }
 
-var Queue TaskQueue
+type Consume struct {
+	Consumer  string     `json:"consumer"`
+	AutoAck   bool       `json:"autoAck"`
+	Exclusive bool       `json:"exclusive"`
+	NoLocal   bool       `json:"noLocal"`
+	NoWait    bool       `json:"noWait"`
+	Args      amqp.Table `json:"args"`
+}
 
-func init() {
-	conn, err := amqp.Dial(os.Getenv("RABBITMQ_URL"))
-	if err != nil {
-		log.Fatalf("%v", err)
-	}
-
-	ch, err := conn.Channel()
-	if err != nil {
-		log.Fatalf("%v", err)
-	}
-
-	Queue = TaskQueue{Conn: conn, Ch: ch}
-	err = Queue.DeclareQueue("task_queue")
-	if err != nil {
-		log.Fatalf("%v", err)
-	}
-	err = Queue.ConsumeQueue()
-	if err != nil {
-		log.Fatalf("%v", err)
-	}
+type TaskQueue struct {
+	conn    *amqp.Connection
+	ch      *amqp.Channel
+	consume <-chan amqp.Delivery
+	queue   amqp.Queue
 }
 
 func (t *TaskQueue) Close() {
-	t.Ch.Close()
-	t.Conn.Close()
+	t.ch.Close()
+	t.conn.Close()
 }
 
-func (t *TaskQueue) DeclareQueue(name string) error {
-	q, err := t.Ch.QueueDeclare(
-		name,  // name
-		true,  // durable
-		false, // delete when unused
-		false, // exclusive
-		false, // no-wait
-		nil,   // arguments
+func DeclareAndRun(addr string, c Consume, qD QueueDeclare) (*TaskQueue, error) {
+	t := &TaskQueue{}
+	conn, err := amqp.Dial(addr)
+	if err != nil {
+		return nil, err
+	}
+	ch, err := conn.Channel()
+	if err != nil {
+		return nil, err
+	}
+	t.ch = ch
+	q, err := t.ch.QueueDeclare(
+		qD.Name,
+		qD.Durable,
+		qD.AutoDelete,
+		qD.Exclusive,
+		qD.NoWait,
+		qD.Args,
 	)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	t.Queue = q
-	return nil
+	t.queue = q
+	consume, err := t.ch.Consume(
+		t.queue.Name,
+		c.Consumer,
+		c.AutoAck,
+		c.Exclusive,
+		c.NoLocal,
+		c.NoWait,
+		c.Args,
+	)
+	if err != nil {
+		return nil, err
+	}
+	t.consume = consume
+	t.processConsume()
+	return t, err
 }

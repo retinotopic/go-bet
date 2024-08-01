@@ -5,25 +5,8 @@ import (
 	"github.com/retinotopic/go-bet/internal/db"
 )
 
-func (t *TaskQueue) ConsumeQueue() error {
-	consume, err := t.Ch.Consume(
-		t.Queue.Name, // queue
-		"",           // consumer
-		false,        // auto-ack
-		false,        // exclusive
-		false,        // no-local
-		false,        // no-wait
-		nil,          // args
-	)
-	if err != nil {
-		return err
-	}
-	t.Consume = consume
-	return nil
-}
-
-func (t *TaskQueue) ProcessConsume() {
-	for msg := range t.Consume {
+func (t *TaskQueue) processConsume() {
+	for msg := range t.consume {
 		m := &Message{}
 		err := json.Unmarshal(msg.Body, m)
 		if err != nil {

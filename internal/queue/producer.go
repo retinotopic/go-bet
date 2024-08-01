@@ -11,9 +11,9 @@ func (t *TaskQueue) PublishTask(data []byte) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	confirmation, err := t.Ch.PublishWithDeferredConfirm(
+	confirmation, err := t.ch.PublishWithDeferredConfirm(
 		"",           // exchange
-		t.Queue.Name, // routing key
+		t.queue.Name, // routing key
 		false,        // mandatory
 		false,        // immediate
 		amqp.Publishing{
