@@ -21,7 +21,10 @@ type Consume struct {
 	NoWait    bool       `json:"noWait"`
 	Args      amqp.Table `json:"args"`
 }
-
+type Config struct {
+	QueueDeclare QueueDeclare `json:"queueDeclare"`
+	Consume      Consume      `json:"consume"`
+}
 type TaskQueue struct {
 	conn    *amqp.Connection
 	ch      *amqp.Channel
