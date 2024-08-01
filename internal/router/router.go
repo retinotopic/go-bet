@@ -3,7 +3,6 @@ package router
 import (
 	"net/http"
 
-	"github.com/retinotopic/go-bet/internal/auth"
 	"github.com/retinotopic/go-bet/internal/hub"
 	"github.com/retinotopic/go-bet/internal/queue"
 )
@@ -29,8 +28,8 @@ func (r *Router) Run() error {
 
 	mux.HandleFunc("/lobby", hub.ConnectLobby)
 	mux.HandleFunc("/findgame", hub.FindGame)
-	mux.HandleFunc("/beginauth", auth.Mproviders.BeginAuth)
-	mux.HandleFunc("/completeauth", auth.Mproviders.CompleteAuth)
+	//mux.HandleFunc("/beginauth", )
+	//mux.HandleFunc("/completeauth", )
 	err = http.ListenAndServe(r.Addr, mux)
 	if err != nil {
 		return err

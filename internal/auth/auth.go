@@ -3,40 +3,15 @@ package auth
 import (
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
-	"os"
 
 	"github.com/golang-jwt/jwt"
 	"github.com/retinotopic/tinyauth/provider"
-	"github.com/retinotopic/tinyauth/providers/firebase"
-	"github.com/retinotopic/tinyauth/providers/google"
 )
 
-func init() {
-	Mproviders.m = make(map[string]provider.Provider)
-	google, err := google.New(os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), os.Getenv("REDIRECT"), "/refresh")
-	if err != nil {
-		log.Fatalln(err)
-	}
-	firebase, err := firebase.New(os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), os.Getenv("REDIRECT"), "refresh")
-	if err != nil {
-		log.Fatalln(err)
-	}
+type ProviderMap map[string]provider.Provider
 
-	// with the issuer claim, we know which provider issued token.
-	Mproviders.m[os.Getenv("ISSUER_FIREBASE")] = firebase
-	Mproviders.m[os.Getenv("ISSUER_GOOGLE")] = google
-	Mproviders.m[os.Getenv("ISSUER2_GOOGLE")] = google
-}
-
-var Mproviders authprovider
-
-type authprovider struct {
-	m map[string]provider.Provider
-}
-
-func (a authprovider) GetProvider(w http.ResponseWriter, r *http.Request) (provider.Provider, error) {
+func (pm ProviderMap) GetProvider(w http.ResponseWriter, r *http.Request) (provider.Provider, error) {
 	cookie, err := r.Cookie("token")
 	if err != nil {
 		return nil, err
@@ -59,20 +34,20 @@ func (a authprovider) GetProvider(w http.ResponseWriter, r *http.Request) (provi
 		return nil, fmt.Errorf("issuer claim is not a string")
 	}
 
-	if prvdr, ok := a.m[issuer]; ok {
+	if prvdr, ok := pm[issuer]; ok {
 		return prvdr, nil
 	}
 	return nil, errors.New("no such provider")
 }
-func (a authprovider) BeginAuth(w http.ResponseWriter, r *http.Request) {
-	prvdr, err := a.GetProvider(w, r)
+func (pm *ProviderMap) BeginAuth(w http.ResponseWriter, r *http.Request) {
+	prvdr, err := pm.GetProvider(w, r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
 	prvdr.BeginAuth(w, r)
 }
-func (a authprovider) CompleteAuth(w http.ResponseWriter, r *http.Request) {
-	prvdr, err := a.GetProvider(w, r)
+func (pm *ProviderMap) CompleteAuth(w http.ResponseWriter, r *http.Request) {
+	prvdr, err := pm.GetProvider(w, r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}

@@ -25,6 +25,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error unmarshaling JSON: %v", err)
 	}
+
 	flag.Parse()
 	fmt.Println(*addr)
 	srv := router.NewRouter(*addr, *addrQueue, config)
