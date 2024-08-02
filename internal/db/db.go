@@ -3,7 +3,6 @@ package db
 import (
 	"context"
 	"errors"
-	"os"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -15,7 +14,7 @@ type Pool struct {
 }
 
 func NewPool(ctx context.Context, addr string) (*Pool, error) {
-	pool, err := pgxpool.New(context.Background(), os.Getenv("DATABASE_URL"))
+	pool, err := pgxpool.New(ctx, addr)
 	if err != nil {
 		return nil, err
 	}

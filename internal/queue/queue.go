@@ -26,10 +26,11 @@ type Config struct {
 	Consume      Consume      `json:"consume"`
 }
 type TaskQueue struct {
-	conn    *amqp.Connection
-	ch      *amqp.Channel
-	consume <-chan amqp.Delivery
-	queue   amqp.Queue
+	conn     *amqp.Connection
+	ch       *amqp.Channel
+	consume  <-chan amqp.Delivery
+	queue    amqp.Queue
+	TaskFunc func(int, int) error
 }
 
 func (t *TaskQueue) Close() {
@@ -37,7 +38,7 @@ func (t *TaskQueue) Close() {
 	t.conn.Close()
 }
 
-func DeclareAndRun(addr string, c Consume, qD QueueDeclare) (*TaskQueue, error) {
+func DeclareAndRun(addr string, c Consume, qD QueueDeclare, taskFunc func(int, int) error) (*TaskQueue, error) {
 	t := &TaskQueue{}
 	conn, err := amqp.Dial(addr)
 	if err != nil {
@@ -74,5 +75,6 @@ func DeclareAndRun(addr string, c Consume, qD QueueDeclare) (*TaskQueue, error) 
 	}
 	t.consume = consume
 	t.processConsume()
+	t.TaskFunc = taskFunc
 	return t, err
 }

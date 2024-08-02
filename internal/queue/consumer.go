@@ -2,7 +2,6 @@ package queue
 
 import (
 	"github.com/goccy/go-json"
-	"github.com/retinotopic/go-bet/internal/db"
 )
 
 func (t *TaskQueue) processConsume() {
@@ -18,7 +17,7 @@ func (t *TaskQueue) processConsume() {
 			continue
 		}
 
-		err = db.ChangeRating(m.User_id, m.Rating)
+		err = t.TaskFunc(m.User_id, m.Rating)
 		if err != nil {
 			m.Attempts++
 			newBody, err := json.Marshal(m)

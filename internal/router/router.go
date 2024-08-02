@@ -1,9 +1,12 @@
 package router
 
 import (
+	"context"
 	"net/http"
+	"os"
 
 	"github.com/retinotopic/go-bet/internal/auth"
+	"github.com/retinotopic/go-bet/internal/db"
 	"github.com/retinotopic/go-bet/internal/hub"
 	"github.com/retinotopic/go-bet/internal/queue"
 )
@@ -20,8 +23,12 @@ func NewRouter(addr string, addrQueue string, config queue.Config, mp auth.Provi
 	return &Router{Addr: addr, AddrQueue: addrQueue, ConfigQueue: config, Auth: mp}
 }
 func (r *Router) Run() error {
-	var err error
-	r.Queue, err = queue.DeclareAndRun(r.AddrQueue, r.ConfigQueue.Consume, r.ConfigQueue.QueueDeclare)
+
+	db, err := db.NewPool(context.Background(), os.Getenv("DATABASE_URL"))
+	if err != nil {
+		return err
+	}
+	r.Queue, err = queue.DeclareAndRun(r.AddrQueue, r.ConfigQueue.Consume, r.ConfigQueue.QueueDeclare, db.ChangeRating)
 	if err != nil {
 		return err
 	}
