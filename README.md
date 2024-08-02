@@ -1,2 +1,2 @@
 # go-bet
-fault-tolerant cash poker app
+fault-tolerant RATING POKER WEB GAME

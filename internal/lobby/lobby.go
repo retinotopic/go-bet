@@ -9,8 +9,8 @@ import (
 	"github.com/retinotopic/go-bet/internal/queue"
 )
 
-func NewLobby() *Lobby {
-	l := &Lobby{PlayerCh: make(chan PlayUnit), StartGame: make(chan bool, 1)}
+func NewLobby(queue *queue.TaskQueue) *Lobby {
+	l := &Lobby{PlayerCh: make(chan PlayUnit), StartGame: make(chan bool, 1), Queue: queue}
 	return l
 }
 

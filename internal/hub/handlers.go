@@ -21,9 +21,9 @@ func (h *HubPump) FindGame(w http.ResponseWriter, r *http.Request) {
 	if idents.User_id == 0 {
 		http.Error(w, "user not found", http.StatusUnauthorized)
 	}
-	h.PlrMutex.RLock()
-	pl, ok := h.Players[idents.Ident]
-	h.PlrMutex.RUnlock()
+	h.plrMutex.RLock()
+	pl, ok := h.players[idents.Ident]
+	h.plrMutex.RUnlock()
 
 	if !ok || ok && pl.URLlobby == 0 {
 		conn, err := upgrader.Upgrade(w, r, nil)
@@ -32,7 +32,7 @@ func (h *HubPump) FindGame(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		pl = &lobby.PlayUnit{User_id: idents.User_id, Name: idents.Name, Conn: conn}
-		h.ReqPlayers <- pl
+		h.reqPlayers <- pl
 		h.keepAlive(conn, time.Second*15)
 
 		pl = &lobby.PlayUnit{}
@@ -52,9 +52,9 @@ func (h *HubPump) FindGame(w http.ResponseWriter, r *http.Request) {
 func (h *HubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 	//check for player presence in map
 	idents := middleware.GetUser(r.Context())
-	h.PlrMutex.RLock()
-	pl, ok := h.Players[idents.Ident]
-	h.PlrMutex.RUnlock()
+	h.plrMutex.RLock()
+	pl, ok := h.players[idents.Ident]
+	h.plrMutex.RUnlock()
 
 	wsurl, err := strconv.ParseUint(r.URL.Path[7:], 10, 0)
 	if err != nil {
@@ -66,24 +66,24 @@ func (h *HubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if pl.URLlobby == wsurl || pl.URLlobby == 0 {
-		h.LMutex.RLock()
-		lb, ok := h.Lobby[wsurl]
-		h.LMutex.RUnlock()
+		h.lMutex.RLock()
+		lb, ok := h.lobby[wsurl]
+		h.lMutex.RUnlock()
 
 		if pl.URLlobby == 0 && (lb.IsRating || lb.HasBegun.Load()) {
 			http.Error(w, "custom game has already started", http.StatusNotFound)
 			return
 		}
 		if pl.URLlobby == 0 && !ok {
-			lb = lobby.NewLobby()
-			h.LMutex.Lock()
-			h.Lobby[wsurl] = lb
-			h.LMutex.Unlock()
+			lb = lobby.NewLobby(nil)
+			h.lMutex.Lock()
+			h.lobby[wsurl] = lb
+			h.lMutex.Unlock()
 			go func() {
 				lb.LobbyWork()
-				h.LMutex.Lock()
-				delete(h.Lobby, wsurl)
-				h.LMutex.Unlock()
+				h.lMutex.Lock()
+				delete(h.lobby, wsurl)
+				h.lMutex.Unlock()
 			}()
 			ok = !ok
 		}

@@ -11,25 +11,25 @@ import (
 )
 
 func NewPump(lenBuffer int) *HubPump {
-	hub := &HubPump{ReqPlayers: make(chan *lobby.PlayUnit, lenBuffer)}
+	hub := &HubPump{reqPlayers: make(chan *lobby.PlayUnit, lenBuffer)}
 	hub.requests()
 	return hub
 }
 
 type HubPump struct {
-	Lobby      map[uint64]*lobby.Lobby // url lobby
-	LMutex     sync.RWMutex
-	Players    map[string]*lobby.PlayUnit // id to player
-	PlrMutex   sync.RWMutex
-	ReqPlayers chan *lobby.PlayUnit
+	lobby      map[uint64]*lobby.Lobby // url lobby
+	lMutex     sync.RWMutex
+	players    map[string]*lobby.PlayUnit // id to player
+	plrMutex   sync.RWMutex
+	reqPlayers chan *lobby.PlayUnit
 	wg         sync.WaitGroup
-	Queue      *queue.TaskQueue
+	queue      *queue.TaskQueue
 }
 
 func (h *HubPump) greenReceive() {
 	plrs := make([]*lobby.PlayUnit, 0, 8)
-	lb := lobby.NewLobby()
-	for cl := range h.ReqPlayers {
+	lb := lobby.NewLobby(h.queue)
+	for cl := range h.reqPlayers {
 		plrs = append(plrs, cl)
 		if len(plrs) == 8 {
 			lb.Players = plrs
@@ -37,9 +37,9 @@ func (h *HubPump) greenReceive() {
 			for _, v := range plrs {
 				v.URLlobby = url
 
-				h.PlrMutex.Lock()
-				h.Players[strconv.Itoa(v.User_id)] = v
-				h.PlrMutex.Unlock()
+				h.plrMutex.Lock()
+				h.players[strconv.Itoa(v.User_id)] = v
+				h.plrMutex.Unlock()
 
 				err := v.Conn.WriteJSON(v)
 				if err != nil {
@@ -47,15 +47,15 @@ func (h *HubPump) greenReceive() {
 				}
 			}
 
-			h.LMutex.Lock()
-			h.Lobby[url] = lb
-			h.LMutex.Unlock()
+			h.lMutex.Lock()
+			h.lobby[url] = lb
+			h.lMutex.Unlock()
 
 			go func() {
 				lb.LobbyWork()
-				h.LMutex.Lock()
-				delete(h.Lobby, url)
-				h.LMutex.Unlock()
+				h.lMutex.Lock()
+				delete(h.lobby, url)
+				h.lMutex.Unlock()
 			}()
 			h.wg.Done()
 			return
@@ -68,7 +68,7 @@ func (h *HubPump) requests() {
 	for {
 		select {
 		case <-t.C:
-			s := len(h.ReqPlayers) / 8
+			s := len(h.reqPlayers) / 8
 			for range s {
 				h.wg.Add(1)
 				go h.greenReceive()
@@ -77,7 +77,7 @@ func (h *HubPump) requests() {
 			t.Reset(time.Millisecond * 25)
 			t1.Reset(time.Second * 30)
 		case <-t1.C: //if there is no lobby after 30 seconds, the game will start if there are more than 1 player
-			s := len(h.ReqPlayers)
+			s := len(h.reqPlayers)
 			if s > 1 {
 				h.wg.Add(1)
 				go h.greenReceive()

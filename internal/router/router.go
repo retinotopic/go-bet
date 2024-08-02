@@ -8,6 +8,7 @@ import (
 	"github.com/retinotopic/go-bet/internal/auth"
 	"github.com/retinotopic/go-bet/internal/db"
 	"github.com/retinotopic/go-bet/internal/hub"
+	"github.com/retinotopic/go-bet/internal/middleware"
 	"github.com/retinotopic/go-bet/internal/queue"
 )
 
@@ -33,12 +34,17 @@ func (r *Router) Run() error {
 		return err
 	}
 	hub := hub.NewPump(1250)
-	mux := http.NewServeMux()
 
-	mux.HandleFunc("/lobby", hub.ConnectLobby)
-	mux.HandleFunc("/findgame", hub.FindGame)
+	middleware := middleware.UserMiddleware{GetUser: db.GetUser, GetProvider: r.Auth.GetProvider, WriteCookie: auth.WriteCookie, ReadCookie: auth.ReadCookie}
+	hConnectLobby := http.HandlerFunc(hub.ConnectLobby)
+	hFindGame := http.HandlerFunc(hub.FindGame)
+
+	mux := http.NewServeMux()
+	mux.Handle("/lobby", middleware.FetchUser(hConnectLobby))
+	mux.Handle("/findgame", middleware.FetchUser(hFindGame))
 	mux.HandleFunc("/beginauth", r.Auth.BeginAuth)
 	mux.HandleFunc("/completeauth", r.Auth.CompleteAuth)
+
 	err = http.ListenAndServe(r.Addr, mux)
 	if err != nil {
 		return err
