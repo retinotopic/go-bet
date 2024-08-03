@@ -2,11 +2,13 @@ package lobby
 
 import (
 	"fmt"
+	"log"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/retinotopic/go-bet/internal/queue"
+	"github.com/retinotopic/go-bet/pkg/wsutils"
 )
 
 func NewLobby(queue *queue.TaskQueue) *Lobby {
@@ -62,7 +64,7 @@ func (l *Lobby) LobbyWork() {
 }
 
 func (l *Lobby) ConnHandle(plr *PlayUnit) {
-	fmt.Println("im in2")
+	go wsutils.KeepAlive(plr.Conn, time.Second*15)
 	l.AdminOnce.Do(func() {
 		if l.IsRating {
 			go l.tickerTillGame()
@@ -76,7 +78,7 @@ func (l *Lobby) ConnHandle(plr *PlayUnit) {
 		if plr.Conn != nil {
 			err := plr.Conn.Close()
 			if err != nil {
-				fmt.Println(err, "error closing connection")
+				log.Println(err, "error closing connection")
 			}
 		}
 	}()

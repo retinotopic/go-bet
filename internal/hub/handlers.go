@@ -9,6 +9,7 @@ import (
 	"github.com/fasthttp/websocket"
 	"github.com/retinotopic/go-bet/internal/lobby"
 	"github.com/retinotopic/go-bet/internal/middleware"
+	"github.com/retinotopic/go-bet/pkg/wsutils"
 )
 
 var upgrader = websocket.Upgrader{
@@ -32,7 +33,7 @@ func (h *HubPump) FindGame(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		pl = &lobby.PlayUnit{User_id: idents.User_id, Name: idents.Name, Conn: conn}
-		h.keepAlive(conn, time.Second*15)
+		go wsutils.KeepAlive(conn, time.Second*15)
 		h.reqPlayers <- pl
 
 		pl = &lobby.PlayUnit{}
@@ -94,33 +95,10 @@ func (h *HubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			pl.Conn = conn
-			go h.keepAlive(pl.Conn, time.Second*20)
 			go lb.ConnHandle(pl)
 		}
 
 	} else {
 		http.Error(w, "lobby not found", http.StatusNotFound)
 	}
-}
-
-func (h *HubPump) keepAlive(c *websocket.Conn, timeout time.Duration) {
-	lastResponse := time.Now()
-	c.SetPongHandler(func(msg string) error {
-		lastResponse = time.Now()
-		return nil
-	})
-
-	go func() {
-		for {
-			err := c.WriteMessage(websocket.PingMessage, []byte("keepalive"))
-			if err != nil {
-				return
-			}
-			time.Sleep(timeout / 2)
-			if time.Since(lastResponse) > timeout {
-				c.Close()
-				return
-			}
-		}
-	}()
 }
