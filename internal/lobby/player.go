@@ -22,6 +22,7 @@ type PlayUnit struct {
 	Name      string `json:"Name,omitempty"`
 	Bankroll  int    `json:"Bankroll,omitempty"`
 	Bet       int    `json:"Bet,omitempty"`
+	CtrlBet   int    `json:"CtrlBet,omitempty"`
 	IsFold    bool   `json:"IsFold,omitempty"`
 	HasActed  bool   `json:"HasActed,omitempty"`
 	Conn      *websocket.Conn

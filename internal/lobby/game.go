@@ -52,16 +52,17 @@ func (g *Game) Game() {
 	for pl := range g.PlayerCh { // evaluating hand
 		if pl.Place == g.PlayersRing.Idx {
 			g.TurnTicker.Stop()
-			if pl.Bet >= g.MaxBet {
-				g.MaxBet = pl.Bet
-			} else {
+
+			pl.Bet = pl.Bet + pl.CtrlBet
+			pl.Bankroll -= pl.CtrlBet
+			pl.ExpirySec = 30
+
+			if pl.Bet < g.MaxBet {
 				pl.IsFold = true
 			}
-			for pl.IsFold {
-				pl = *g.PlayersRing.Next(1)
-			}
+			g.PlayerBroadcast <- pl
 			if pl.Bet == g.MaxBet && pl.HasActed {
-				switch turn {
+				switch stages {
 				case flop: // preflop to flop
 					flopcard := g.Deck.Draw(3)
 					g.Board.Cards = append(g.Board.Cards, flopcard...)
@@ -77,13 +78,19 @@ func (g *Game) Game() {
 					stages = -1
 				}
 				for _, v := range g.Players {
-					v.HasActed = false
+					v.HasActed, v.IsFold = false, false
 				}
+				stages++
+			}
+			if pl.Bet >= g.MaxBet {
+				g.MaxBet = pl.Bet
 			}
 			pl.HasActed = true
 			g.PlayersRing.Next(1)
-			stages++
-			g.TurnTicker.Reset(time.Duration(0))
+			for pl.IsFold {
+				pl = *g.PlayersRing.Next(1)
+			}
+			g.TurnTicker.Reset(time.Second * 30)
 		}
 	}
 }
@@ -124,7 +131,8 @@ func (g *Game) DealNewHand() {
 	g.Board.Cards = make([]poker.Card, 0, 7)
 
 	g.PlayersRing.Next(1).Bet = g.SmallBlind
-	g.PlayersRing.Next(2).Bet = g.SmallBlind * 2
+	g.PlayersRing.Next(1).Bet = g.SmallBlind * 2
+	g.PlayersRing.Next(1)
 	//send all players to all players (broadcast)
 	for _, pl := range g.Players {
 		g.PlayerBroadcast <- *pl

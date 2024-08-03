@@ -97,10 +97,8 @@ func (l *Lobby) ConnHandle(plr *PlayUnit) {
 			fmt.Println(err, "conn read error")
 			break
 		}
-		if ctrl.Bet <= plr.Bankroll && ctrl.Bet >= 0 {
-			plr.Bet = plr.Bet + ctrl.Bet
-			plr.Bankroll -= ctrl.Bet
-			plr.ExpirySec = 30
+		if ctrl.CtrlBet <= plr.Bankroll && ctrl.CtrlBet >= 0 {
+			plr.CtrlBet = ctrl.CtrlBet
 			l.PlayerCh <- *plr
 		}
 	}
