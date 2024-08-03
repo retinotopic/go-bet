@@ -73,6 +73,10 @@ func DeclareAndRun(addr string, c Consume, qD QueueDeclare, taskFunc func(int, i
 	if err != nil {
 		return nil, err
 	}
+	err = t.ch.Confirm(false)
+	if err != nil {
+		return nil, err
+	}
 	t.consume = consume
 	t.processConsume()
 	t.TaskFunc = taskFunc

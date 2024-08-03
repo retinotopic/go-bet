@@ -16,17 +16,17 @@ func (rs *PlayersRing) Next(offset int) *PlayUnit {
 }
 
 type PlayUnit struct {
-	User_id   int    `json:"UserId"`
-	IsRating  bool   `json:"IsRating"`
-	Rating    int    `json:"Rating"`
-	Name      string `json:"Name"`
-	Bankroll  int    `json:"Bankroll"`
-	Bet       int    `json:"Bet"`
-	IsFold    bool   `json:"IsFold"`
-	HasActed  bool   `json:"HasActed"`
+	User_id   int    `json:"UserId,omitempty"`
+	IsRating  bool   `json:"IsRating,omitempty"`
+	Rating    int    `json:"Rating,omitempty"`
+	Name      string `json:"Name,omitempty"`
+	Bankroll  int    `json:"Bankroll,omitempty"`
+	Bet       int    `json:"Bet,omitempty"`
+	IsFold    bool   `json:"IsFold,omitempty"`
+	HasActed  bool   `json:"HasActed,omitempty"`
 	Conn      *websocket.Conn
 	Place     int          `json:"Place"`
-	Admin     bool         `json:"IsAdmin"`
+	Admin     bool         `json:"IsAdmin,omitempty"`
 	Cards     []poker.Card `json:"Hand,omitempty"`
 	ValueSec  int          `json:"Time,omitempty"`
 	ExpirySec int
@@ -34,7 +34,7 @@ type PlayUnit struct {
 }
 
 func (p PlayUnit) PrivateSend() PlayUnit {
-	return PlayUnit{Cards: []poker.Card{}, Place: p.Place}
+	return PlayUnit{Place: p.Place}
 }
 func (p PlayUnit) SendTimeValue(time int) PlayUnit {
 	return PlayUnit{ValueSec: time, Place: p.Place}

@@ -7,7 +7,7 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-func (t *TaskQueue) PublishTask(data []byte) error {
+func (t *TaskQueue) PublishTask(data []byte, retry int) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -26,7 +26,10 @@ func (t *TaskQueue) PublishTask(data []byte) error {
 	}
 	ok, err := confirmation.WaitContext(ctx)
 	if !ok || err != nil {
-		return t.PublishTask(data)
+		if retry <= 1 {
+			return err
+		}
+		return t.PublishTask(data, retry-1)
 	}
 	return nil
 }

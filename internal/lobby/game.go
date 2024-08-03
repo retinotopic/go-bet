@@ -52,12 +52,6 @@ func (g *Game) Game() {
 	for pl := range g.PlayerCh { // evaluating hand
 		if pl.Place == g.PlayersRing.Idx {
 			g.TurnTicker.Stop()
-			g.Lock()
-			if pl.HasActed {
-				continue
-			}
-			pl.HasActed = true
-			g.Unlock()
 			if pl.Bet >= g.MaxBet {
 				g.MaxBet = pl.Bet
 			} else {
@@ -86,9 +80,10 @@ func (g *Game) Game() {
 					v.HasActed = false
 				}
 			}
+			pl.HasActed = true
 			g.PlayersRing.Next(1)
 			stages++
-			g.TurnTicker.Reset(time.Second * 30)
+			g.TurnTicker.Reset(time.Duration(0))
 		}
 	}
 }
@@ -170,7 +165,7 @@ func (g *Game) CalcRating(plr []*PlayUnit, place int) {
 		rating := int(math.Round(float64(baseChange) * (middlePlace - float64(place)) / (middlePlace - 1)))
 		data, err := g.Queue.NewMessage(plr.User_id, rating)
 		if err != nil {
-			g.Queue.PublishTask(data)
+			g.Queue.PublishTask(data, 5)
 		}
 		plr.Conn.WriteJSON(plr)
 		plr.Conn.Close()

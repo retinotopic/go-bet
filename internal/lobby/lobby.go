@@ -31,6 +31,7 @@ type Lobby struct { //
 	sync.Mutex
 	AdminOnce       sync.Once
 	PlayerCh        chan PlayUnit
+	SeatCh          chan PlayUnit
 	StartGame       chan bool
 	GameOver        atomic.Bool
 	PlayerBroadcast chan PlayUnit
@@ -45,7 +46,7 @@ func (l *Lobby) LobbyWork() {
 	l.LenPlayers = len(l.Players)
 	for {
 		select {
-		case x := <-l.PlayerCh: // broadcoasting one seat to everyone
+		case x := <-l.SeatCh: // broadcoasting one seat to everyone
 			for _, v := range l.Players {
 				v.Conn.WriteJSON(x)
 			}
