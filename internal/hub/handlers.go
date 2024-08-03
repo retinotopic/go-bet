@@ -32,11 +32,11 @@ func (h *HubPump) FindGame(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		pl = &lobby.PlayUnit{User_id: idents.User_id, Name: idents.Name, Conn: conn}
-		h.reqPlayers <- pl
 		h.keepAlive(conn, time.Second*15)
+		h.reqPlayers <- pl
 
 		pl = &lobby.PlayUnit{}
-		err = conn.ReadJSON(pl)
+		err = conn.WriteJSON(pl)
 		if err != nil {
 			log.Println(err)
 		}

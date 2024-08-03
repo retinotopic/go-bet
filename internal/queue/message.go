@@ -10,7 +10,7 @@ type Message struct {
 	Attempts int `json:"attempts"`
 }
 
-func NewMessage(user_id, rating int) ([]byte, error) {
+func (t *TaskQueue) NewMessage(user_id, rating int) ([]byte, error) {
 	m := &Message{User_id: user_id, Rating: rating}
 	data, err := json.Marshal(m)
 	return data, err

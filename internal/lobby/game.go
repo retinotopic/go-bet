@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/chehsunliu/poker"
-	"github.com/retinotopic/go-bet/internal/queue"
 )
 
 type Game struct {
@@ -34,7 +33,8 @@ func (g *Game) tickerTillNextTurn() {
 	for range g.TurnTicker.C {
 		timevalue++
 		g.PlayerBroadcast <- g.Players[g.PlayersRing.Idx].SendTimeValue(timevalue)
-		if timevalue >= 30 {
+		if timevalue >= g.Players[g.PlayersRing.Idx].ExpirySec {
+			g.Players[g.PlayersRing.Idx].ExpirySec /= 2
 			g.TurnTicker.Stop()
 			g.PlayerCh <- *g.Players[g.PlayersRing.Idx]
 		}
@@ -86,8 +86,9 @@ func (g *Game) Game() {
 					v.HasActed = false
 				}
 			}
+			g.PlayersRing.Next(1)
 			stages++
-			go g.tickerTillNextTurn()
+			g.TurnTicker.Reset(time.Second * 30)
 		}
 	}
 }
@@ -110,6 +111,7 @@ func (g *Game) PostRiver() (gameOver bool) {
 	} else if len(elims) != 0 {
 		g.CalcRating(elims, last)
 		g.Players = newPlayers
+		g.Idx -= len(elims)
 	}
 	g.DealNewHand()
 	return
@@ -132,7 +134,6 @@ func (g *Game) DealNewHand() {
 	for _, pl := range g.Players {
 		g.PlayerBroadcast <- *pl
 	}
-	g.TurnTicker.Reset(time.Second * 30)
 }
 
 func (g *Game) CalcWinners() {
@@ -167,7 +168,7 @@ func (g *Game) CalcRating(plr []*PlayUnit, place int) {
 	middlePlace := float64(g.LenPlayers+1) / 2
 	for _, plr := range plr {
 		rating := int(math.Round(float64(baseChange) * (middlePlace - float64(place)) / (middlePlace - 1)))
-		data, err := queue.NewMessage(plr.User_id, rating)
+		data, err := g.Queue.NewMessage(plr.User_id, rating)
 		if err != nil {
 			g.Queue.PublishTask(data)
 		}
