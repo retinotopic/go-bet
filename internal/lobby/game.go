@@ -55,12 +55,20 @@ func (g *Game) Game() {
 
 			pl.Bet = pl.Bet + pl.CtrlBet
 			pl.Bankroll -= pl.CtrlBet
-			pl.ExpirySec = 30
 
-			if pl.Bet < g.MaxBet {
+			if pl.Bet >= g.MaxBet {
+				g.MaxBet = pl.Bet
+			} else {
 				pl.IsFold = true
 			}
+
 			g.PlayerBroadcast <- pl
+
+			pl.HasActed = true
+			g.PlayersRing.Next(1)
+			for pl.IsFold {
+				pl = *g.PlayersRing.Next(1)
+			}
 			if pl.Bet == g.MaxBet && pl.HasActed {
 				switch stages {
 				case flop: // preflop to flop
@@ -82,14 +90,7 @@ func (g *Game) Game() {
 				}
 				stages++
 			}
-			if pl.Bet >= g.MaxBet {
-				g.MaxBet = pl.Bet
-			}
-			pl.HasActed = true
-			g.PlayersRing.Next(1)
-			for pl.IsFold {
-				pl = *g.PlayersRing.Next(1)
-			}
+
 			g.TurnTicker.Reset(time.Second * 30)
 		}
 	}

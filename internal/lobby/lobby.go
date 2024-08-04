@@ -101,6 +101,7 @@ func (l *Lobby) ConnHandle(plr *PlayUnit) {
 		}
 		if ctrl.CtrlBet <= plr.Bankroll && ctrl.CtrlBet >= 0 {
 			plr.CtrlBet = ctrl.CtrlBet
+			plr.ExpirySec = 30
 			l.PlayerCh <- *plr
 		}
 	}

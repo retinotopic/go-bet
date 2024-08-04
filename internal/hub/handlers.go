@@ -18,12 +18,12 @@ var upgrader = websocket.Upgrader{
 }
 
 func (h *HubPump) FindGame(w http.ResponseWriter, r *http.Request) {
-	idents := middleware.GetUser(r.Context())
-	if idents.User_id == 0 {
+	user_id, ident, name := middleware.GetUser(r.Context())
+	if user_id == 0 {
 		http.Error(w, "user not found", http.StatusUnauthorized)
 	}
 	h.plrMutex.RLock()
-	pl, ok := h.players[idents.Ident]
+	pl, ok := h.players[ident]
 	h.plrMutex.RUnlock()
 
 	if !ok || ok && pl.URLlobby == 0 {
@@ -32,7 +32,7 @@ func (h *HubPump) FindGame(w http.ResponseWriter, r *http.Request) {
 			log.Println(err)
 			return
 		}
-		pl = &lobby.PlayUnit{User_id: idents.User_id, Name: idents.Name, Conn: conn}
+		pl = &lobby.PlayUnit{User_id: user_id, Name: name, Conn: conn}
 		go wsutils.KeepAlive(conn, time.Second*15)
 		h.reqPlayers <- pl
 
@@ -52,9 +52,9 @@ func (h *HubPump) FindGame(w http.ResponseWriter, r *http.Request) {
 }
 func (h *HubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 	//check for player presence in map
-	idents := middleware.GetUser(r.Context())
+	user_id, ident, name := middleware.GetUser(r.Context())
 	h.plrMutex.RLock()
-	pl, ok := h.players[idents.Ident]
+	pl, ok := h.players[ident]
 	h.plrMutex.RUnlock()
 
 	wsurl, err := strconv.ParseUint(r.URL.Path[7:], 10, 0)
@@ -63,7 +63,7 @@ func (h *HubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !ok {
-		pl = &lobby.PlayUnit{User_id: idents.User_id, Name: idents.Name}
+		pl = &lobby.PlayUnit{User_id: user_id, Name: name}
 	}
 
 	if pl.URLlobby == wsurl || pl.URLlobby == 0 {
