@@ -26,6 +26,9 @@ type Config struct {
 	Consume      Consume      `json:"consume"`
 }
 type TaskQueue struct {
+	c        Consume
+	addr     string
+	qD       QueueDeclare
 	conn     *amqp.Connection
 	ch       *amqp.Channel
 	consume  <-chan amqp.Delivery
@@ -37,48 +40,53 @@ func (t *TaskQueue) Close() {
 	t.ch.Close()
 	t.conn.Close()
 }
-
-func DeclareAndRun(addr string, c Consume, qD QueueDeclare, taskFunc func(int, int) error) (*TaskQueue, error) {
-	t := &TaskQueue{}
-	conn, err := amqp.Dial(addr)
+func (t *TaskQueue) TryConnect() {
+	conn, err := amqp.Dial(t.addr)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	ch, err := conn.Channel()
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	t.ch = ch
 	q, err := t.ch.QueueDeclare(
-		qD.Name,
-		qD.Durable,
-		qD.AutoDelete,
-		qD.Exclusive,
-		qD.NoWait,
-		qD.Args,
+		t.qD.Name,
+		t.qD.Durable,
+		t.qD.AutoDelete,
+		t.qD.Exclusive,
+		t.qD.NoWait,
+		t.qD.Args,
 	)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	t.queue = q
 	consume, err := t.ch.Consume(
 		t.queue.Name,
-		c.Consumer,
-		c.AutoAck,
-		c.Exclusive,
-		c.NoLocal,
-		c.NoWait,
-		c.Args,
+		t.c.Consumer,
+		t.c.AutoAck,
+		t.c.Exclusive,
+		t.c.NoLocal,
+		t.c.NoWait,
+		t.c.Args,
 	)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	err = t.ch.Confirm(false)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	t.consume = consume
 	t.processConsume()
+}
+
+func NewQueue(addr string, c Consume, qD QueueDeclare, taskFunc func(int, int) error) *TaskQueue {
+	t := &TaskQueue{}
+	t.addr = addr
+	t.c = c
+	t.qD = qD
 	t.TaskFunc = taskFunc
-	return t, err
+	return t
 }

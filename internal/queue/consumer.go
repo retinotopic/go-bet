@@ -1,10 +1,23 @@
 package queue
 
 import (
+	"errors"
+	"log"
+
 	"github.com/goccy/go-json"
 )
 
 func (t *TaskQueue) processConsume() {
+	for {
+		err := t.consumeReceive()
+		if err != nil {
+			log.Printf("Error in consume: %v. Attempting to reconnect...", err)
+			t.TryConnect()
+		}
+	}
+}
+
+func (t *TaskQueue) consumeReceive() error {
 	for msg := range t.consume {
 		m := &Message{}
 		err := json.Unmarshal(msg.Body, m)
@@ -31,4 +44,5 @@ func (t *TaskQueue) processConsume() {
 		}
 		msg.Ack(false)
 	}
+	return errors.New("consume channel closed")
 }

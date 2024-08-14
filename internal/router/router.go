@@ -29,10 +29,9 @@ func (r *Router) Run() error {
 	if err != nil {
 		return err
 	}
-	r.Queue, err = queue.DeclareAndRun(r.AddrQueue, r.ConfigQueue.Consume, r.ConfigQueue.QueueDeclare, db.ChangeRating)
-	if err != nil {
-		return err
-	}
+	r.Queue = queue.NewQueue(r.AddrQueue, r.ConfigQueue.Consume, r.ConfigQueue.QueueDeclare, db.ChangeRating)
+	r.Queue.TryConnect()
+
 	hub := hub.NewPump(1250)
 
 	middleware := middleware.UserMiddleware{GetUser: db.GetUser, GetProvider: r.Auth.GetProvider, WriteCookie: auth.WriteCookie, ReadCookie: auth.ReadCookie}
