@@ -81,10 +81,10 @@ func (h *HubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 			h.lobby[wsurl] = lb
 			h.lMutex.Unlock()
 			go func() {
+				defer h.lMutex.Unlock()
 				lb.LobbyWork()
 				h.lMutex.Lock()
 				delete(h.lobby, wsurl)
-				h.lMutex.Unlock()
 			}()
 			ok = !ok
 		}

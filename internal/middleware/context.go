@@ -21,7 +21,7 @@ func WithUser(ctx context.Context, ident IdentScope) context.Context {
 func GetUser(ctx context.Context) (int, string, string) {
 	user, ok := ctx.Value(userCtxKey).(IdentScope)
 	if !ok {
-		log.Println()
+		log.Println("retrieve user id from context error")
 		return 0, "", ""
 	}
 	return user.User_id, user.Ident, user.Name

@@ -33,7 +33,8 @@ type Lobby struct { //
 	sync.Mutex
 	AdminOnce       sync.Once
 	PlayerCh        chan PlayUnit
-	SeatCh          chan PlayUnit
+	shutdown        chan bool
+	timeout         time.Duration
 	StartGame       chan bool
 	GameOver        atomic.Bool
 	PlayerBroadcast chan PlayUnit
@@ -48,18 +49,16 @@ func (l *Lobby) LobbyWork() {
 	l.LenPlayers = len(l.Players)
 	for {
 		select {
-		case x := <-l.SeatCh: // broadcoasting one seat to everyone
-			for _, v := range l.Players {
-				v.Conn.WriteJSON(x)
-			}
+		case <-l.shutdown:
+			return
 		case <-l.StartGame:
-			close(l.StartGame)
 			game := Game{Lobby: l}
 			l.HasBegun.Store(true)
 			game.Game()
 			l.GameOver.Store(true)
 			return
 		}
+
 	}
 }
 
@@ -110,13 +109,20 @@ func (l *Lobby) tickerTillGame() {
 	timer := time.NewTimer(time.Second * 45)
 	for range timer.C {
 		l.StartGame <- true
+		close(l.StartGame)
 		return
 	}
 }
 
 // player broadcast method
 func (l *Lobby) Broadcast() {
+	lastResponse := time.Now()
 	for pb := range l.PlayerBroadcast {
+		if time.Since(lastResponse) > l.timeout {
+			l.shutdown <- true
+		} else {
+			lastResponse = time.Now()
+		}
 		for _, v := range l.Players {
 			if pb.Place != v.Place {
 				pb = v.PrivateSend()
