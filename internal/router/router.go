@@ -16,7 +16,6 @@ type Router struct {
 	Addr        string
 	AddrQueue   string
 	ConfigQueue queue.Config
-	Queue       *queue.TaskQueue
 	Auth        auth.ProviderMap
 }
 
@@ -29,8 +28,8 @@ func (r *Router) Run() error {
 	if err != nil {
 		return err
 	}
-	r.Queue = queue.NewQueue(r.AddrQueue, r.ConfigQueue.Consume, r.ConfigQueue.QueueDeclare, db.ChangeRating)
-	r.Queue.TryConnect()
+	queue := queue.NewQueue(r.AddrQueue, r.ConfigQueue.Consume, r.ConfigQueue.QueueDeclare, db.ChangeRating)
+	queue.TryConnect()
 
 	hub := hub.NewPump(1250)
 

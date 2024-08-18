@@ -7,12 +7,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/retinotopic/go-bet/internal/queue"
 	"github.com/retinotopic/go-bet/pkg/wsutils"
 )
 
-func NewLobby(queue *queue.TaskQueue) *Lobby {
-	l := &Lobby{PlayerCh: make(chan PlayUnit), StartGame: make(chan bool, 1), Queue: queue}
+func NewLobby(queue Queue) *Lobby {
+	l := &Lobby{PlayerCh: make(chan PlayUnit), StartGame: make(chan bool, 1), queue: queue}
 	return l
 }
 
@@ -26,6 +25,10 @@ const (
 type top struct {
 	place  int
 	rating int32
+}
+type Queue interface {
+	PublishTask([]byte, int) error
+	NewMessage(int, int) ([]byte, error)
 }
 type Lobby struct { //
 	PlayersRing //
@@ -42,7 +45,7 @@ type Lobby struct { //
 	LenPlayers      int //
 	HasBegun        atomic.Bool
 	Url             string
-	Queue           *queue.TaskQueue
+	queue           Queue
 }
 
 func (l *Lobby) LobbyWork() {

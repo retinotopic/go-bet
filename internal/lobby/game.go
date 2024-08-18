@@ -172,9 +172,9 @@ func (g *Game) CalcRating(plr []*PlayUnit, place int) {
 	middlePlace := float64(g.LenPlayers+1) / 2
 	for _, plr := range plr {
 		rating := int(math.Round(float64(baseChange) * (middlePlace - float64(place)) / (middlePlace - 1)))
-		data, err := g.Queue.NewMessage(plr.User_id, rating)
+		data, err := g.queue.NewMessage(plr.User_id, rating)
 		if err != nil {
-			g.Queue.PublishTask(data, 5)
+			g.queue.PublishTask(data, 5)
 		}
 		plr.Conn.WriteJSON(plr)
 		plr.Conn.Close()

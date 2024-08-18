@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/retinotopic/go-bet/internal/lobby"
-	"github.com/retinotopic/go-bet/internal/queue"
 )
 
 func NewPump(lenBuffer int) *HubPump {
@@ -23,7 +22,7 @@ type HubPump struct {
 	plrMutex   sync.RWMutex
 	reqPlayers chan *lobby.PlayUnit
 	wg         sync.WaitGroup
-	queue      *queue.TaskQueue
+	queue      lobby.Queue
 }
 
 func (h *HubPump) greenReceive() {
