@@ -33,10 +33,13 @@ func (p *Pool) NewUser(ctx context.Context, sub, username string) error {
 
 func (p *Pool) GetRatings(user_id string) (pgx.Rows, error) {
 
-	rows, err := p.Query(context.Background(), `
-	(SELECT users.name,ratings.rating FROM ratings JOIN users ON ratings.user_id=users.user_id WHERE ratings.user_id = $1)
-	UNION ALL
-	(SELECT users.name,ratings.rating FROM ratings JOIN users ON ratings.user_id=users.user_id ORDER BY rating DESC LIMIT 100);`, user_id)
+	rows, err := p.Query(context.Background(), `WITH common_query AS (
+    	SELECT users.name, ratings.rating 
+    	FROM ratings 
+    	JOIN users ON ratings.user_id = users.user_id )
+		SELECT * FROM common_query WHERE ratings.user_id = $1
+		UNION ALL
+		SELECT * FROM common_query ORDER BY rating DESC LIMIT 100;`, user_id)
 	return rows, err
 }
 func (p *Pool) ChangeRating(user_id int, rating int) error {
