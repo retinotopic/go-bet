@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/pressly/goose/v3"
 	"github.com/retinotopic/go-bet/internal/auth"
 	"github.com/retinotopic/go-bet/internal/db"
 	"github.com/retinotopic/go-bet/internal/hub"
@@ -26,6 +28,16 @@ func (r *Router) Run() error {
 
 	db, err := db.NewPool(context.Background(), os.Getenv("DATABASE_URL"))
 	if err != nil {
+		return err
+	}
+	sqldb := stdlib.OpenDBFromPool(db.Pool)
+	if err := goose.SetDialect("postgres"); err != nil {
+		return err
+	}
+	if err := goose.Up(sqldb, "migrations"); err != nil {
+		return err
+	}
+	if err := sqldb.Close(); err != nil {
 		return err
 	}
 	queue := queue.NewQueue(r.AddrQueue, r.ConfigQueue.Consume, r.ConfigQueue.QueueDeclare, db.ChangeRating)
