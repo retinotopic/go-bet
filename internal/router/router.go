@@ -31,7 +31,7 @@ func (r *Router) Run() error {
 	queue := queue.NewQueue(r.AddrQueue, r.ConfigQueue.Consume, r.ConfigQueue.QueueDeclare, db.ChangeRating)
 	queue.TryConnect()
 
-	hub := hub.NewPump(1250)
+	hub := hub.NewPump(1250, queue)
 
 	middleware := middleware.UserMiddleware{GetUser: db.GetUser, GetProvider: r.Auth.GetProvider, WriteCookie: auth.WriteCookie, ReadCookie: auth.ReadCookie}
 	hConnectLobby := http.HandlerFunc(hub.ConnectLobby)

@@ -9,8 +9,8 @@ import (
 	"github.com/retinotopic/go-bet/internal/lobby"
 )
 
-func NewPump(lenBuffer int) *HubPump {
-	hub := &HubPump{reqPlayers: make(chan *lobby.PlayUnit, lenBuffer)}
+func NewPump(lenBuffer int, queue lobby.Queue) *HubPump {
+	hub := &HubPump{reqPlayers: make(chan *lobby.PlayUnit, lenBuffer), queue: queue}
 	hub.requests()
 	return hub
 }
