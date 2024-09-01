@@ -6,13 +6,13 @@ import (
 )
 
 type PlayersRing struct {
-	Players []*PlayUnit
+	Players []PlayUnit
 	Idx     int
 }
 
-func (rs *PlayersRing) Next(offset int) *PlayUnit {
+func (rs *PlayersRing) Next(offset int) int {
 	rs.Idx = (rs.Idx + offset) % len(rs.Players)
-	return rs.Players[rs.Idx]
+	return rs.Idx
 }
 
 type PlayUnit struct {

@@ -32,11 +32,12 @@ func (g *Game) tickerTillNextTurn() {
 	timevalue := 0
 	for range g.TurnTicker.C {
 		timevalue++
-		g.PlayerBroadcast <- g.Players[g.PlayersRing.Idx].SendTimeValue(timevalue)
-		if timevalue >= g.Players[g.PlayersRing.Idx].ExpirySec {
-			g.Players[g.PlayersRing.Idx].ExpirySec /= 2
+		idx := g.PlayersRing.Idx
+		g.PlayerBroadcast <- g.Players[idx].SendTimeValue(timevalue)
+		if timevalue >= g.Players[idx].ExpirySec {
+			g.Players[idx].ExpirySec /= 2
 			g.TurnTicker.Stop()
-			g.PlayerCh <- *g.Players[g.PlayersRing.Idx]
+			g.PlayerCh <- g.Players[idx]
 		}
 	}
 }
@@ -67,7 +68,7 @@ func (g *Game) Game() {
 			pl.HasActed = true
 			g.PlayersRing.Next(1)
 			for pl.IsFold {
-				pl = *g.PlayersRing.Next(1)
+				pl = g.Players[g.PlayersRing.Next(1)]
 			}
 			if pl.Bet == g.MaxBet && pl.HasActed {
 				switch stages {
@@ -97,8 +98,8 @@ func (g *Game) Game() {
 }
 func (g *Game) PostRiver() (gameOver bool) {
 	g.CalcWinners()
-	newPlayers := make([]*PlayUnit, 0, 8)
-	elims := make([]*PlayUnit, 0, 8)
+	newPlayers := make([]PlayUnit, 0, 8)
+	elims := make([]PlayUnit, 0, 8)
 	var last int
 	for i, v := range g.Players {
 		if v.Bankroll > 0 {
@@ -131,12 +132,12 @@ func (g *Game) DealNewHand() {
 	g.Board = PlayUnit{}
 	g.Board.Cards = make([]poker.Card, 0, 7)
 
-	g.PlayersRing.Next(1).Bet = g.SmallBlind
-	g.PlayersRing.Next(1).Bet = g.SmallBlind * 2
+	g.Players[g.PlayersRing.Next(1)].Bet = g.SmallBlind
+	g.Players[g.PlayersRing.Next(1)].Bet = g.SmallBlind * 2
 	g.PlayersRing.Next(1)
 	//send all players to all players (broadcast)
 	for _, pl := range g.Players {
-		g.PlayerBroadcast <- *pl
+		g.PlayerBroadcast <- pl
 	}
 }
 
@@ -164,7 +165,7 @@ func (g *Game) CalcWinners() {
 		g.Players[topPlaces[pl].place].Bankroll += share
 	}
 }
-func (g *Game) CalcRating(plr []*PlayUnit, place int) {
+func (g *Game) CalcRating(plr []PlayUnit, place int) {
 	if !g.IsRating {
 		return
 	}

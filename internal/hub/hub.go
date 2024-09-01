@@ -10,7 +10,7 @@ import (
 )
 
 func NewPump(lenBuffer int, queue lobby.Queue) *HubPump {
-	hub := &HubPump{reqPlayers: make(chan *lobby.PlayUnit, lenBuffer), queue: queue}
+	hub := &HubPump{reqPlayers: make(chan lobby.PlayUnit, lenBuffer), queue: queue}
 	hub.requests()
 	return hub
 }
@@ -18,15 +18,15 @@ func NewPump(lenBuffer int, queue lobby.Queue) *HubPump {
 type HubPump struct {
 	lobby      map[uint64]*lobby.Lobby // url lobby
 	lMutex     sync.RWMutex
-	players    map[string]*lobby.PlayUnit // id to player
+	players    map[string]lobby.PlayUnit // id to player
 	plrMutex   sync.RWMutex
-	reqPlayers chan *lobby.PlayUnit
+	reqPlayers chan lobby.PlayUnit
 	wg         sync.WaitGroup
 	queue      lobby.Queue
 }
 
 func (h *HubPump) greenReceive() {
-	plrs := make([]*lobby.PlayUnit, 0, 8)
+	plrs := make([]lobby.PlayUnit, 0, 8)
 	lb := lobby.NewLobby(h.queue)
 	for cl := range h.reqPlayers {
 		plrs = append(plrs, cl)

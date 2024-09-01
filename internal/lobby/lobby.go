@@ -69,13 +69,13 @@ func (l *Lobby) LobbyWork() {
 	}
 }
 
-func (l *Lobby) ConnHandle(plr *PlayUnit) {
+func (l *Lobby) ConnHandle(plr PlayUnit) {
 	go wsutils.KeepAlive(plr.Conn, time.Second*15)
 	l.AdminOnce.Do(func() {
 		if l.IsRating {
 			go l.tickerTillGame()
 		} else {
-			l.Admin = *plr
+			l.Admin = plr
 			plr.Admin = true
 		}
 	})
@@ -90,7 +90,7 @@ func (l *Lobby) ConnHandle(plr *PlayUnit) {
 	}()
 	for _, v := range l.Players { // load current state of the game
 		if v.Place != plr.Place {
-			*v = v.PrivateSend()
+			v = v.PrivateSend()
 		}
 		err := plr.Conn.WriteJSON(v)
 		if err != nil {
@@ -108,7 +108,7 @@ func (l *Lobby) ConnHandle(plr *PlayUnit) {
 		if ctrl.CtrlBet <= plr.Bankroll && ctrl.CtrlBet >= 0 {
 			plr.CtrlBet = ctrl.CtrlBet
 			plr.ExpirySec = 30
-			l.PlayerCh <- *plr
+			l.PlayerCh <- plr
 		}
 	}
 }

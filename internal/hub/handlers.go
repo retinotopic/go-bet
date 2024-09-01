@@ -32,19 +32,11 @@ func (h *HubPump) FindGame(w http.ResponseWriter, r *http.Request) {
 			log.Println(err)
 			return
 		}
-		pl = &lobby.PlayUnit{User_id: user_id, Name: name, Conn: conn}
-		go wsutils.KeepAlive(conn, time.Second*15)
-		h.reqPlayers <- pl
 
-		pl = &lobby.PlayUnit{}
-		err = conn.WriteJSON(pl)
-		if err != nil {
-			log.Println(err)
-		}
-		err = conn.Close()
-		if err != nil {
-			log.Println(err)
-		}
+		go wsutils.KeepAlive(conn, time.Second*15)
+		h.reqPlayers <- lobby.PlayUnit{User_id: user_id, Name: name, Conn: conn}
+
+		wsutils.KeepAlive(conn, time.Second*15)
 
 	} else {
 		http.Error(w, "user not found", http.StatusUnauthorized)
@@ -63,7 +55,7 @@ func (h *HubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !ok {
-		pl = &lobby.PlayUnit{User_id: user_id, Name: name}
+		pl = lobby.PlayUnit{User_id: user_id, Name: name}
 	}
 
 	if pl.URLlobby == wsurl || pl.URLlobby == 0 {
