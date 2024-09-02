@@ -33,7 +33,7 @@ func (g *Game) tickerTillNextTurn() {
 	for range g.TurnTicker.C {
 		timevalue++
 		idx := g.PlayersRing.Idx
-		g.PlayerBroadcast <- g.Players[idx].SendTimeValue(timevalue)
+		g.BroadcastCh <- g.Players[idx].SendTimeValue(timevalue)
 		if timevalue >= g.Players[idx].ExpirySec {
 			g.Players[idx].ExpirySec /= 2
 			g.TurnTicker.Stop()
@@ -46,7 +46,7 @@ func (g *Game) Game() {
 	rand.New(rand.NewSource(int64(new(maphash.Hash).Sum64()))).Shuffle(g.LenPlayers, func(i, j int) {
 		g.Players[i], g.Players[j] = g.Players[j], g.Players[i]
 	})
-	g.PlayerBroadcast = make(chan PlayUnit)
+	g.BroadcastCh = make(chan PlayUnit)
 	g.DealNewHand()
 	go g.tickerTillNextTurn()
 	go g.timerTillBlind()
@@ -63,7 +63,7 @@ func (g *Game) Game() {
 				pl.IsFold = true
 			}
 
-			g.PlayerBroadcast <- pl
+			g.BroadcastCh <- pl
 
 			pl.HasActed = true
 			g.PlayersRing.Next(1)
@@ -75,11 +75,11 @@ func (g *Game) Game() {
 				case flop: // preflop to flop
 					flopcard := g.Deck.Draw(3)
 					g.Board.Cards = append(g.Board.Cards, flopcard...)
-					g.PlayerBroadcast <- g.Board
+					g.BroadcastCh <- g.Board
 				case turn, river: // flop to turn, turn to river
 					flopcard := g.Deck.Draw(1)
 					g.Board.Cards = append(g.Board.Cards, flopcard[0])
-					g.PlayerBroadcast <- g.Board
+					g.BroadcastCh <- g.Board
 				case postriver:
 					if ok := g.PostRiver(); ok {
 						return
@@ -137,7 +137,7 @@ func (g *Game) DealNewHand() {
 	g.PlayersRing.Next(1)
 	//send all players to all players (broadcast)
 	for _, pl := range g.Players {
-		g.PlayerBroadcast <- pl
+		g.BroadcastCh <- pl
 	}
 }
 

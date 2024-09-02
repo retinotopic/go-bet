@@ -34,18 +34,18 @@ type Lobby struct { //
 	PlayersRing //
 	Admin       PlayUnit
 	sync.Mutex
-	AdminOnce       sync.Once
-	PlayerCh        chan PlayUnit
-	checkTimeout    *time.Ticker
-	lastResponse    time.Time
-	StartGame       chan bool
-	GameOver        atomic.Bool
-	PlayerBroadcast chan PlayUnit
-	IsRating        bool
-	LenPlayers      int //
-	HasBegun        atomic.Bool
-	Url             string
-	queue           Queue
+	AdminOnce    sync.Once
+	PlayerCh     chan PlayUnit
+	checkTimeout *time.Ticker
+	lastResponse time.Time
+	StartGame    chan bool
+	GameOver     atomic.Bool
+	BroadcastCh  chan PlayUnit
+	IsRating     bool
+	LenPlayers   int //
+	HasBegun     atomic.Bool
+	Url          string
+	queue        Queue
 }
 
 func (l *Lobby) LobbyWork() {
@@ -123,7 +123,7 @@ func (l *Lobby) tickerTillGame() {
 
 // player broadcast method
 func (l *Lobby) Broadcast() {
-	for pb := range l.PlayerBroadcast {
+	for pb := range l.BroadcastCh {
 		l.lastResponse = time.Now()
 		for _, v := range l.Players {
 			if pb.Place != v.Place {

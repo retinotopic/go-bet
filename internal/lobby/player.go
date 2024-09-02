@@ -16,22 +16,22 @@ func (rs *PlayersRing) Next(offset int) int {
 }
 
 type PlayUnit struct {
-	User_id   int    `json:"UserId,omitempty"`
-	IsRating  bool   `json:"IsRating,omitempty"`
-	Rating    int    `json:"Rating,omitempty"`
-	Name      string `json:"Name,omitempty"`
-	Bankroll  int    `json:"Bankroll,omitempty"`
-	Bet       int    `json:"Bet,omitempty"`
-	CtrlBet   int    `json:"CtrlBet,omitempty"`
-	IsFold    bool   `json:"IsFold,omitempty"`
-	HasActed  bool   `json:"HasActed,omitempty"`
-	Conn      *websocket.Conn
-	Place     int          `json:"Place"`
-	Admin     bool         `json:"IsAdmin,omitempty"`
-	Cards     []poker.Card `json:"Hand,omitempty"`
-	ValueSec  int          `json:"Time,omitempty"`
+	IsFold    bool `json:"IsFold,omitempty"`
+	HasActed  bool `json:"HasActed,omitempty"`
+	Admin     bool `json:"IsAdmin,omitempty"`
+	IsRating  bool `json:"IsRating,omitempty"`
+	Rating    int  `json:"Rating,omitempty"`
+	Bankroll  int  `json:"Bankroll,omitempty"`
+	Bet       int  `json:"Bet,omitempty"`
+	CtrlBet   int  `json:"CtrlBet,omitempty"`
+	User_id   int  `json:"UserId,omitempty"`
+	Place     int  `json:"Place"`
+	ValueSec  int  `json:"Time,omitempty"`
 	ExpirySec int
+	Conn      *websocket.Conn
 	URLlobby  uint64
+	Cards     []poker.Card `json:"Hand,omitempty"`
+	Name      string       `json:"Name,omitempty"`
 }
 
 func (p PlayUnit) PrivateSend() PlayUnit {
