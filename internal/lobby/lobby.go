@@ -51,6 +51,7 @@ type Lobby struct { //
 func (l *Lobby) LobbyWork() {
 	l.LenPlayers = len(l.Players)
 	l.checkTimeout = time.NewTicker(time.Minute * 5)
+	l.BroadcastCh = make(chan PlayUnit)
 	timeout := time.Minute * 6
 	for {
 		select {

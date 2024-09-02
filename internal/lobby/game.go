@@ -18,38 +18,54 @@ type Game struct {
 	MaxBet     int          //
 	TurnTicker *time.Ticker //
 	BlindTimer *time.Timer  //
+	stop       chan bool
 }
 
 func (g *Game) timerTillBlind() {
-	g.BlindTimer = time.NewTimer(time.Minute * 5)
-	for range g.BlindTimer.C {
-		g.SmallBlind *= 2
-		g.BlindTimer.Reset(time.Minute * 5)
+	for {
+		select {
+		case <-g.BlindTimer.C:
+			g.SmallBlind *= 2
+			g.BlindTimer.Reset(time.Minute * 5)
+		case <-g.stop:
+			return
+		}
 	}
 }
 func (g *Game) tickerTillNextTurn() {
-	g.TurnTicker = time.NewTicker(time.Second * 1)
 	timevalue := 0
-	for range g.TurnTicker.C {
-		timevalue++
-		idx := g.PlayersRing.Idx
-		g.BroadcastCh <- g.Players[idx].SendTimeValue(timevalue)
-		if timevalue >= g.Players[idx].ExpirySec {
-			g.Players[idx].ExpirySec /= 2
-			g.TurnTicker.Stop()
-			g.PlayerCh <- g.Players[idx]
+	for {
+		select {
+		case <-g.TurnTicker.C:
+			timevalue++
+			idx := g.PlayersRing.Idx
+			g.BroadcastCh <- g.Players[idx].SendTimeValue(timevalue)
+			if timevalue >= g.Players[idx].ExpirySec {
+				g.Players[idx].ExpirySec /= 2
+				g.TurnTicker.Stop()
+				g.PlayerCh <- g.Players[idx]
+			}
+		case <-g.stop:
+			return
 		}
 	}
 }
 func (g *Game) Game() {
 	var stages int
+	g.stop = make(chan bool, 2)
 	rand.New(rand.NewSource(int64(new(maphash.Hash).Sum64()))).Shuffle(g.LenPlayers, func(i, j int) {
 		g.Players[i], g.Players[j] = g.Players[j], g.Players[i]
 	})
-	g.BroadcastCh = make(chan PlayUnit)
 	g.DealNewHand()
+
+	g.TurnTicker = time.NewTicker(time.Second * 1)
 	go g.tickerTillNextTurn()
+	g.BlindTimer = time.NewTimer(time.Minute * 5)
 	go g.timerTillBlind()
+	defer func() { // prevent goroutine leakage
+		g.stop <- true
+		g.stop <- true
+	}()
 	for pl := range g.PlayerCh { // evaluating hand
 		if pl.Place == g.PlayersRing.Idx {
 			g.TurnTicker.Stop()
