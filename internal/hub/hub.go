@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/retinotopic/go-bet/internal/lobby"
+	"github.com/retinotopic/go-bet/internal/hub/lobby"
 )
 
 func NewPump(lenBuffer int, queue lobby.Queue) *HubPump {

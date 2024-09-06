@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/fasthttp/websocket"
-	"github.com/retinotopic/go-bet/internal/lobby"
+	"github.com/retinotopic/go-bet/internal/hub/lobby"
 	"github.com/retinotopic/go-bet/internal/middleware"
 	"github.com/retinotopic/go-bet/pkg/wsutils"
 )
