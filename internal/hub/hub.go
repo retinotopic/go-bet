@@ -15,6 +15,9 @@ func NewPump(lenBuffer int, queue lobby.Queue) *HubPump {
 	return hub
 }
 
+type lobbyImpler interface {
+	HandleConn(lobby.PlayUnit)
+}
 type HubPump struct {
 	lobby      map[uint64]*lobby.Lobby // url lobby
 	lMutex     sync.RWMutex

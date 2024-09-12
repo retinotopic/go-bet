@@ -1,17 +1,12 @@
 package lobby
 
 import (
-	"fmt"
-	"log"
 	"sync"
-	"sync/atomic"
 	"time"
-
-	"github.com/retinotopic/go-bet/pkg/wsutils"
 )
 
 func NewLobby(queue Queue) *Lobby {
-	l := &Lobby{PlayerCh: make(chan PlayUnit), StartGame: make(chan bool, 1), queue: queue}
+	l := &Lobby{PlayerCh: make(chan PlayUnit), StartGame: make(chan bool, 1)}
 	return l
 }
 
@@ -26,99 +21,48 @@ type top struct {
 	place  int
 	rating int32
 }
-type Queue interface {
-	PublishTask([]byte, int) error
-	NewMessage(int, int) ([]byte, error)
-}
-type Lobby struct { //
-	PlayersRing //
-	Admin       PlayUnit
-	sync.Mutex
-	AdminOnce    sync.Once
+
+type Lobby struct {
+	PlayersRing  //
+	GameMtx      sync.Mutex
 	PlayerCh     chan PlayUnit
 	checkTimeout *time.Ticker
 	lastResponse time.Time
 	StartGame    chan bool
-	GameOver     atomic.Bool
 	BroadcastCh  chan PlayUnit
-	IsRating     bool
-	LenPlayers   int //
-	HasBegun     atomic.Bool
-	Url          string
-	queue        Queue
+	Shutdown     chan bool
+	Url          uint64
+	PlayerOut    func(PlayUnit)
+	PlayerIter   func(yield func(PlayUnit) bool)
 }
 
-func (l *Lobby) LobbyWork() {
-	l.LenPlayers = len(l.Players)
+func (l *Lobby) LobbyStart() {
 	l.checkTimeout = time.NewTicker(time.Minute * 5)
+	l.Shutdown = make(chan bool, 2)
 	l.BroadcastCh = make(chan PlayUnit)
+	l.PlayerCh = make(chan PlayUnit)
 	timeout := time.Minute * 6
 	for {
 		select {
 		case <-l.checkTimeout.C:
 			if time.Since(l.lastResponse) > timeout {
-				return
+				for range 2 { //shutdowns,one for game and one for lobby
+					l.Shutdown <- true
+				}
 			}
 		case <-l.StartGame:
-			game := Game{Lobby: l}
-			l.HasBegun.Store(true)
-			game.Game()
-			l.GameOver.Store(true)
+			ok := l.GameMtx.TryLock() // trying to check if there already a game in progress
+			if ok {
+				go func() {
+					g := Game{Lobby: l}
+					g.Game()
+					defer l.GameMtx.Unlock()
+				}()
+			}
+		case <-l.Shutdown:
 			return
 		}
 
-	}
-}
-
-func (l *Lobby) ConnHandle(plr PlayUnit) {
-	go wsutils.KeepAlive(plr.Conn, time.Second*15)
-	l.AdminOnce.Do(func() {
-		if l.IsRating {
-			go l.tickerTillGame()
-		} else {
-			l.Admin = plr
-			plr.Admin = true
-		}
-	})
-
-	defer func() {
-		if plr.Conn != nil {
-			err := plr.Conn.Close()
-			if err != nil {
-				log.Println(err, "error closing connection")
-			}
-		}
-	}()
-	for _, v := range l.Players { // load current state of the game
-		if v.Place != plr.Place {
-			v = v.PrivateSend()
-		}
-		err := plr.Conn.WriteJSON(v)
-		if err != nil {
-			fmt.Println(err, "WriteJSON start")
-		}
-		fmt.Println("start")
-	}
-	for {
-		ctrl := PlayUnit{}
-		err := plr.Conn.ReadJSON(&ctrl)
-		if err != nil {
-			fmt.Println(err, "conn read error")
-			break
-		}
-		if ctrl.CtrlBet <= plr.Bankroll && ctrl.CtrlBet >= 0 {
-			plr.CtrlBet = ctrl.CtrlBet
-			plr.ExpirySec = 30
-			l.PlayerCh <- plr
-		}
-	}
-}
-func (l *Lobby) tickerTillGame() {
-	timer := time.NewTimer(time.Second * 45)
-	for range timer.C {
-		l.StartGame <- true
-		close(l.StartGame)
-		return
 	}
 }
 
@@ -126,7 +70,7 @@ func (l *Lobby) tickerTillGame() {
 func (l *Lobby) Broadcast() {
 	for pb := range l.BroadcastCh {
 		l.lastResponse = time.Now()
-		for _, v := range l.Players {
+		for v := range l.PlayerIter {
 			if pb.Place != v.Place {
 				pb = v.PrivateSend()
 			}

@@ -2,7 +2,6 @@ package lobby
 
 import (
 	"hash/maphash"
-	"math"
 	"math/rand"
 	"sort"
 	"time"
@@ -53,7 +52,7 @@ func (g *Game) tickerTillNextTurn() {
 func (g *Game) Game() {
 	var stages int
 	g.stop = make(chan bool, 2)
-	rand.New(rand.NewSource(int64(new(maphash.Hash).Sum64()))).Shuffle(g.LenPlayers, func(i, j int) {
+	rand.New(rand.NewSource(int64(new(maphash.Hash).Sum64()))).Shuffle(len(g.PlayersRing.Players), func(i, j int) {
 		g.Players[i], g.Players[j] = g.Players[j], g.Players[i]
 	})
 	g.DealNewHand()
@@ -66,51 +65,57 @@ func (g *Game) Game() {
 		g.stop <- true
 		g.stop <- true
 	}()
-	for pl := range g.PlayerCh { // evaluating hand
-		if pl.Place == g.PlayersRing.Idx {
-			g.TurnTicker.Stop()
+	for {
+		select {
+		case pl, ok := <-g.PlayerCh:
+			if pl.Place == g.PlayersRing.Idx && ok {
+				g.TurnTicker.Stop()
 
-			pl.Bet = pl.Bet + pl.CtrlBet
-			pl.Bankroll -= pl.CtrlBet
+				pl.Bet = pl.Bet + pl.CtrlBet
+				pl.Bankroll -= pl.CtrlBet
 
-			if pl.Bet >= g.MaxBet {
-				g.MaxBet = pl.Bet
-			} else {
-				pl.IsFold = true
-			}
+				if pl.Bet >= g.MaxBet {
+					g.MaxBet = pl.Bet
+				} else {
+					pl.IsFold = true
+				}
 
-			g.BroadcastCh <- pl
+				g.BroadcastCh <- pl
 
-			pl.HasActed = true
-			g.PlayersRing.Next(1)
-			for pl.IsFold {
-				pl = g.Players[g.PlayersRing.Next(1)]
-			}
-			if pl.Bet == g.MaxBet && pl.HasActed {
-				switch stages {
-				case flop: // preflop to flop
-					flopcard := g.Deck.Draw(3)
-					g.Board.Cards = append(g.Board.Cards, flopcard...)
-					g.BroadcastCh <- g.Board
-				case turn, river: // flop to turn, turn to river
-					flopcard := g.Deck.Draw(1)
-					g.Board.Cards = append(g.Board.Cards, flopcard[0])
-					g.BroadcastCh <- g.Board
-				case postriver:
-					if ok := g.PostRiver(); ok {
-						return
+				pl.HasActed = true
+				g.PlayersRing.Next(1)
+				for pl.IsFold {
+					pl = g.Players[g.PlayersRing.Next(1)]
+				}
+				if pl.Bet == g.MaxBet && pl.HasActed {
+					switch stages {
+					case flop: // preflop to flop
+						flopcard := g.Deck.Draw(3)
+						g.Board.Cards = append(g.Board.Cards, flopcard...)
+						g.BroadcastCh <- g.Board
+					case turn, river: // flop to turn, turn to river
+						flopcard := g.Deck.Draw(1)
+						g.Board.Cards = append(g.Board.Cards, flopcard[0])
+						g.BroadcastCh <- g.Board
+					case postriver:
+						if ok := g.PostRiver(); ok {
+							return
+						}
+						stages = -1
 					}
-					stages = -1
+					for _, v := range g.Players {
+						v.HasActed, v.IsFold = false, false
+					}
+					stages++
 				}
-				for _, v := range g.Players {
-					v.HasActed, v.IsFold = false, false
-				}
-				stages++
-			}
 
-			g.TurnTicker.Reset(time.Second * 30)
+				g.TurnTicker.Reset(time.Second * 30)
+			}
+		case <-g.Shutdown:
+			return
 		}
 	}
+
 }
 func (g *Game) PostRiver() (gameOver bool) {
 	g.CalcWinners()
@@ -179,21 +184,5 @@ func (g *Game) CalcWinners() {
 	share := g.Board.Bankroll / i
 	for pl := range i {
 		g.Players[topPlaces[pl].place].Bankroll += share
-	}
-}
-func (g *Game) CalcRating(plr []PlayUnit, place int) {
-	if !g.IsRating {
-		return
-	}
-	baseChange := 30
-	middlePlace := float64(g.LenPlayers+1) / 2
-	for _, plr := range plr {
-		rating := int(math.Round(float64(baseChange) * (middlePlace - float64(place)) / (middlePlace - 1)))
-		data, err := g.queue.NewMessage(plr.User_id, rating)
-		if err != nil {
-			g.queue.PublishTask(data, 5)
-		}
-		plr.Conn.WriteJSON(plr)
-		plr.Conn.Close()
 	}
 }
