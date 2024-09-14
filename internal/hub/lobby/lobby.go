@@ -3,6 +3,8 @@ package lobby
 import (
 	"sync"
 	"time"
+
+	csmap "github.com/mhmtszr/concurrent-swiss-map"
 )
 
 func NewLobby(queue Queue) *Lobby {
@@ -23,8 +25,9 @@ type top struct {
 }
 
 type Lobby struct {
-	PlayersRing  //
-	GameMtx      sync.Mutex
+	PlayersRing                                 //
+	m            *csmap.CsMap[string, PlayUnit] // id to place mapping
+	GameMtx      sync.RWMutex
 	PlayerCh     chan PlayUnit
 	checkTimeout *time.Ticker
 	lastResponse time.Time
@@ -32,16 +35,15 @@ type Lobby struct {
 	BroadcastCh  chan PlayUnit
 	Shutdown     chan bool
 	Url          uint64
-	PlayerOut    func(PlayUnit)
-	PlayerIter   func(yield func(PlayUnit) bool)
+	PlayerOut    func([]PlayUnit)
 }
 
-func (l *Lobby) LobbyStart() {
+func (l *Lobby) LobbyStart(yield func(PlayUnit) bool) {
 	l.checkTimeout = time.NewTicker(time.Minute * 5)
 	l.Shutdown = make(chan bool, 2)
 	l.BroadcastCh = make(chan PlayUnit)
 	l.PlayerCh = make(chan PlayUnit)
-	timeout := time.Minute * 6
+	timeout := time.Minute * 4
 	for {
 		select {
 		case <-l.checkTimeout.C:
@@ -71,10 +73,20 @@ func (l *Lobby) Broadcast() {
 	for pb := range l.BroadcastCh {
 		l.lastResponse = time.Now()
 		for v := range l.PlayerIter {
-			if pb.Place != v.Place {
+			if pb.Place != v.Place || !pb.Exposed {
 				pb = v.PrivateSend()
 			}
 			v.Conn.WriteJSON(pb)
+			pb.Exposed = false
 		}
 	}
+}
+func (l *Lobby) PlayerIter(yield func(PlayUnit) bool) {
+	for _, pl := range l.Players { /// players
+		yield(pl)
+	}
+	l.m.Range(func(key string, val PlayUnit) (stop bool) { // spectators
+		yield(val)
+		return
+	})
 }

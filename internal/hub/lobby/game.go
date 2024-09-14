@@ -121,20 +121,18 @@ func (g *Game) PostRiver() (gameOver bool) {
 	g.CalcWinners()
 	newPlayers := make([]PlayUnit, 0, 8)
 	elims := make([]PlayUnit, 0, 8)
-	var last int
-	for i, v := range g.Players {
+	for _, v := range g.Players {
 		if v.Bankroll > 0 {
 			newPlayers = append(newPlayers, v)
 		} else {
-			last = len(g.Players) - i
 			elims = append(elims, v)
 		}
 	}
 	if len(newPlayers) == 1 {
-		g.CalcRating(newPlayers, 1)
+		g.PlayerOut(newPlayers)
 		return true
 	} else if len(elims) != 0 {
-		g.CalcRating(elims, last)
+		g.PlayerOut(elims)
 		g.Players = newPlayers
 		g.Idx -= len(elims)
 	}
@@ -164,7 +162,7 @@ func (g *Game) DealNewHand() {
 
 func (g *Game) CalcWinners() {
 	var emptyCard poker.Card
-	topPlaces := make([]top, 0, 7)
+	topPlaces := make([]top, 0, 8)
 	g.Board.Cards = append(g.Board.Cards, emptyCard, emptyCard)
 	for i, v := range g.Players {
 		if !v.IsFold {
@@ -182,7 +180,11 @@ func (g *Game) CalcWinners() {
 	for ; i == 0 || topPlaces[i].rating == topPlaces[i-1].rating; i++ {
 	}
 	share := g.Board.Bankroll / i
-	for pl := range i {
-		g.Players[topPlaces[pl].place].Bankroll += share
+	for j := range i {
+		pl := g.Players[topPlaces[j].place]
+		pl.Bankroll += share
+		pl.Exposed = true
+		g.BroadcastCh <- pl
 	}
+	time.Sleep(time.Second * 4)
 }

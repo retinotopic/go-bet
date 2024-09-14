@@ -6,31 +6,42 @@ import (
 	"sync"
 	"time"
 
+	csmap "github.com/mhmtszr/concurrent-swiss-map"
+
 	"github.com/retinotopic/go-bet/internal/hub/lobby"
 )
 
 func NewPump(lenBuffer int, queue lobby.Queue) *HubPump {
-	hub := &HubPump{reqPlayers: make(chan lobby.PlayUnit, lenBuffer), queue: queue}
+	lm := csmap.Create[uint64, LobbyImpler](
+		csmap.WithShardCount[uint64, LobbyImpler](128),
+		csmap.WithSize[uint64, LobbyImpler](1000),
+	)
+	plm := csmap.Create[string, lobby.PlayUnit](
+		csmap.WithShardCount[string, lobby.PlayUnit](128),
+		csmap.WithSize[string, lobby.PlayUnit](1000),
+	)
+	hub := &HubPump{reqPlayers: make(chan lobby.PlayUnit, lenBuffer), lobby: lm, players: plm}
 	hub.requests()
 	return hub
 }
 
-type lobbyImpler interface {
+type LobbyImpler interface {
 	HandleConn(lobby.PlayUnit)
+	Broadcast()
+	LobbyStart()
 }
 type HubPump struct {
-	lobby      map[uint64]*lobby.Lobby // url lobby
+	lobby      *csmap.CsMap[uint64, LobbyImpler]
 	lMutex     sync.RWMutex
-	players    map[string]lobby.PlayUnit // id to player
+	players    *csmap.CsMap[string, lobby.PlayUnit] // id to player
 	plrMutex   sync.RWMutex
 	reqPlayers chan lobby.PlayUnit
 	wg         sync.WaitGroup
-	queue      lobby.Queue
 }
 
 func (h *HubPump) greenReceive() {
 	plrs := make([]lobby.PlayUnit, 0, 8)
-	lb := lobby.NewLobby(h.queue)
+	lb := lobby.NewLobby()
 	for cl := range h.reqPlayers {
 		plrs = append(plrs, cl)
 		if len(plrs) == 8 {
@@ -38,26 +49,16 @@ func (h *HubPump) greenReceive() {
 			url := new(maphash.Hash).Sum64()
 			for _, v := range plrs {
 				v.URLlobby = url
-
-				h.plrMutex.Lock()
-				h.players[strconv.Itoa(v.User_id)] = v
-				h.plrMutex.Unlock()
-
-				err := v.Conn.WriteJSON(v)
-				if err != nil {
-					v.Conn.WriteJSON(v)
-				}
+				h.players.Store(strconv.Itoa(v.User_id), v)
+				v.Conn.WriteJSON(v)
 			}
 
-			h.lMutex.Lock()
-			h.lobby[url] = lb
-			h.lMutex.Unlock()
+			h.lobby.Store(url, lb)
 
 			go func() {
 				lb.LobbyWork()
-				h.lMutex.Lock()
-				delete(h.lobby, url)
-				h.lMutex.Unlock()
+				h.lobby.Delete(url)
+
 			}()
 			h.wg.Done()
 			return

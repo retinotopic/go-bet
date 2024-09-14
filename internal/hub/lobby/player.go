@@ -16,6 +16,7 @@ func (rs *PlayersRing) Next(offset int) int {
 }
 
 type PlayUnit struct {
+	Exposed   bool `json:"Exposed,omitempty"`
 	IsFold    bool `json:"IsFold,omitempty"`
 	HasActed  bool `json:"HasActed,omitempty"`
 	Admin     bool `json:"IsAdmin,omitempty"`
@@ -24,7 +25,6 @@ type PlayUnit struct {
 	Bankroll  int  `json:"Bankroll,omitempty"`
 	Bet       int  `json:"Bet,omitempty"`
 	CtrlBet   int  `json:"CtrlBet,omitempty"`
-	User_id   int  `json:"UserId,omitempty"`
 	Place     int  `json:"Place"`
 	ValueSec  int  `json:"Time,omitempty"`
 	ExpirySec int
@@ -32,6 +32,8 @@ type PlayUnit struct {
 	URLlobby  uint64
 	Cards     []poker.Card `json:"Hand,omitempty"`
 	Name      string       `json:"Name,omitempty"`
+	Message   string       `json:"Message,omitempty"`
+	User_id   string       `json:"UserId,omitempty"`
 }
 
 func (p PlayUnit) PrivateSend() PlayUnit {

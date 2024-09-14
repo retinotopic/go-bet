@@ -14,10 +14,11 @@ import (
 
 var secret = []byte(os.Getenv("SECRET_KEY"))
 
-func WriteCookie(w http.ResponseWriter, name string) *http.Cookie {
+func WriteCookie(w http.ResponseWriter) *http.Cookie {
 	mac := hmac.New(sha256.New, secret)
 	value := uuid.New().String()
 	cookie := &http.Cookie{Secure: true, Path: "/", HttpOnly: true}
+	name + value/2
 	mac.Write([]byte(name))
 	mac.Write([]byte(value))
 	signature := base64.StdEncoding.EncodeToString(mac.Sum(nil))

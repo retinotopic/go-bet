@@ -19,39 +19,32 @@ type Queue interface {
 	NewMessage(int, int) ([]byte, error)
 }
 
-func (l *Lobby) tickerTillGame() {
+func (r *RatingImpl) tickerTillGame() {
 	timer := time.NewTimer(time.Second * 45)
 	for range timer.C {
-		l.StartGame <- true
+		r.StartGame <- true
 		return
 	}
 }
-func (g *Game) CalcRating(plr []PlayUnit, place int) {
+func (r *RatingImpl) PlayerOut(plr []PlayUnit, place int) {
 	baseChange := 30
-	middlePlace := float64(g.LenPlayers+1) / 2
+	middlePlace := float64(len(r.Players)+1) / 2
 	for _, plr := range plr {
 		rating := int(math.Round(float64(baseChange) * (middlePlace - float64(place)) / (middlePlace - 1)))
-		data, err := g.queue.NewMessage(plr.User_id, rating)
+		data, err := r.q.NewMessage(plr.User_id, rating)
 		if err != nil {
-			g.queue.PublishTask(data, 5)
+			r.q.PublishTask(data, 5)
 		}
 		plr.Conn.WriteJSON(plr)
 		plr.Conn.Close()
 	}
 }
 
-func (l *Lobby) ConnHandle(plr PlayUnit) {
+func (r *RatingImpl) HandleConn(plr PlayUnit) {
 	go wsutils.KeepAlive(plr.Conn, time.Second*15)
-	l.AdminOnce.Do(func() {
-		if l.IsRating {
-			go l.tickerTillGame()
-		} else {
-			l.Admin = plr
-			plr.Admin = true
-		}
-	})
 
 	defer func() {
+
 		if plr.Conn != nil {
 			err := plr.Conn.Close()
 			if err != nil {
@@ -74,7 +67,7 @@ func (l *Lobby) ConnHandle(plr PlayUnit) {
 		ctrl := PlayUnit{}
 		err := plr.Conn.ReadJSON(&ctrl)
 		if err != nil {
-			fmt.Println(err, "conn read error")
+			log.Println(err, "conn read error")
 			break
 		}
 		if ctrl.CtrlBet <= plr.Bankroll && ctrl.CtrlBet >= 0 {

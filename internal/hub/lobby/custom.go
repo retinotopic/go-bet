@@ -2,48 +2,38 @@ package lobby
 
 import (
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
+	csmap "github.com/mhmtszr/concurrent-swiss-map"
 	"github.com/retinotopic/go-bet/pkg/wsutils"
 )
-
 type CustomImpl struct {
 	*Lobby
 	AdminOnce sync.Once
-	Admin     PlayUnit
+	AdminId     string
+	HasBegun bool
 }
+func (c *CustomImpl) Validate(plr PlayUnit) {
 
-func (l *Lobby) ConnHandle(plr PlayUnit) {
+}
+func (c *CustomImpl) HandleConn(plr PlayUnit) {
 	go wsutils.KeepAlive(plr.Conn, time.Second*15)
-	l.AdminOnce.Do(func() {
-		if l.IsRating {
-			go l.tickerTillGame()
-		} else {
-			l.Admin = plr
-			plr.Admin = true
-		}
+	c.AdminOnce.Do(func() {
+		c.AdminId = plr.User_id
 	})
-
 	defer func() {
-		if plr.Conn != nil {
-			err := plr.Conn.Close()
-			if err != nil {
-				log.Println(err, "error closing connection")
-			}
+		if c.m.DeleteIf(plr.User_id,func(value PlayUnit) bool {return value.Place == -1}) {
+			c.BroadcastCh<-plr
 		}
+		plr.Conn.Close()
 	}()
 
-	for _, v := range l.Players { // load current state of the game
-		if v.Place != plr.Place {
+	for _, v := range c.Players { // load current state of the game
+		if v.Place != plr.Place || !v.Exposed {
 			v = v.PrivateSend()
 		}
-		err := plr.Conn.WriteJSON(v)
-		if err != nil {
-			fmt.Println(err, "WriteJSON start")
-		}
-		fmt.Println("start")
+		plr.Conn.WriteJSON(v)
 	}
 	for {
 		ctrl := PlayUnit{}
@@ -52,10 +42,20 @@ func (l *Lobby) ConnHandle(plr PlayUnit) {
 			fmt.Println(err, "conn read error")
 			break
 		}
+		if game
 		if ctrl.CtrlBet <= plr.Bankroll && ctrl.CtrlBet >= 0 {
 			plr.CtrlBet = ctrl.CtrlBet
 			plr.ExpirySec = 30
-			l.PlayerCh <- plr
+			c.PlayerCh <- plr
 		}
+		if !Game
+			::place
+			if c.AdminId = plr.User_id
+				::board place
+
+
 	}
 }
+
+
+
