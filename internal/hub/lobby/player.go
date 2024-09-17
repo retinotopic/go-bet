@@ -6,7 +6,7 @@ import (
 )
 
 type PlayersRing struct {
-	Players []PlayUnit
+	Players []*PlayUnit
 	Idx     int
 }
 
@@ -36,9 +36,12 @@ type PlayUnit struct {
 	User_id   string       `json:"UserId,omitempty"`
 }
 
-func (p PlayUnit) PrivateSend() PlayUnit {
-	return PlayUnit{Place: p.Place}
-}
-func (p PlayUnit) SendTimeValue(time int) PlayUnit {
-	return PlayUnit{ValueSec: time, Place: p.Place}
+func (p *PlayUnit) Send(pb *PlayUnit, protect bool) {
+	var temp []poker.Card
+	if protect {
+		temp = pb.Cards
+		pb.Cards = []poker.Card{}
+	}
+	p.Conn.WriteJSON(pb)
+	pb.Cards = temp
 }

@@ -1,61 +1,84 @@
 package lobby
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
-	csmap "github.com/mhmtszr/concurrent-swiss-map"
 	"github.com/retinotopic/go-bet/pkg/wsutils"
 )
+
 type CustomImpl struct {
-	*Lobby
-	AdminOnce sync.Once
-	AdminId     string
-	HasBegun bool
+	*Game
+	AdminOnce  sync.Once
+	Admin      *PlayUnit
+	ValidateCh chan Ctrl
 }
-func (c *CustomImpl) Validate(plr PlayUnit) {
+
+func (c *CustomImpl) Validate(ctrl Ctrl) {
+	if c.HasBegun {
+		if ctrl.CtrlBet <= ctrl.plr.Bankroll && ctrl.CtrlBet >= 0 {
+			if ctrl.plr.Place > 0 {
+				ctrl.plr.CtrlBet = ctrl.CtrlBet
+				ctrl.plr.ExpirySec = 30
+				c.PlayerCh <- ctrl.plr
+			} else if ctrl.plr.Place == 0 {
+				c.HasBegun = false
+			}
+		}
+	} else {
+		if c.Admin == ctrl.plr {
+			if ctrl.Place == 0 {
+				c.HasBegun = true
+				i := 0
+				c.m.Range(func(key string, val *PlayUnit) (stop bool) { // spectators
+					if val.Place > 0 {
+						c.Players[i] = val
+						i++
+					}
+					return
+				})
+				c.StartGameCh <- true
+			} else {
+				pl, ok := c.m.Load(ctrl.User_id) // admin approves player seat
+				if ok {
+					pl.Place = ctrl.Place
+					c.BroadcastCh <- ctrl.plr
+				}
+			}
+		} else if ctrl.Place > 0 && ctrl.Place <= 8 {
+			c.Admin.Conn.WriteJSON(ctrl.plr)
+		}
+	}
 
 }
-func (c *CustomImpl) HandleConn(plr PlayUnit) {
+func (c *CustomImpl) HandleConn(plr *PlayUnit) {
 	go wsutils.KeepAlive(plr.Conn, time.Second*15)
+	c.m.SetIfAbsent(plr.User_id, plr)
+
 	c.AdminOnce.Do(func() {
-		c.AdminId = plr.User_id
+		c.Admin = plr
 	})
 	defer func() {
-		if c.m.DeleteIf(plr.User_id,func(value PlayUnit) bool {return value.Place == -1}) {
-			c.BroadcastCh<-plr
+		if c.m.DeleteIf(plr.User_id, func(value *PlayUnit) bool { return value.Place == -1 }) { //if the seat is unoccupied, delete from map
+			c.BroadcastCh <- plr
 		}
 		plr.Conn.Close()
 	}()
 
 	for _, v := range c.Players { // load current state of the game
-		if v.Place != plr.Place || !v.Exposed {
-			v = v.PrivateSend()
+		protect := false
+		if v.Place != plr.Place {
+			protect = true
 		}
-		plr.Conn.WriteJSON(v)
+		plr.Send(v, protect)
 	}
-	for {
-		ctrl := PlayUnit{}
+	for { // listening for actions
+		ctrl := Ctrl{}
 		err := plr.Conn.ReadJSON(&ctrl)
 		if err != nil {
-			fmt.Println(err, "conn read error")
 			break
 		}
-		if game
-		if ctrl.CtrlBet <= plr.Bankroll && ctrl.CtrlBet >= 0 {
-			plr.CtrlBet = ctrl.CtrlBet
-			plr.ExpirySec = 30
-			c.PlayerCh <- plr
-		}
-		if !Game
-			::place
-			if c.AdminId = plr.User_id
-				::board place
-
-
+		ctrl.plr = plr
+		c.ValidateCh <- ctrl
 	}
 }
-
-
-

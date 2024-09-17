@@ -8,7 +8,7 @@ import (
 )
 
 func NewLobby(queue Queue) *Lobby {
-	l := &Lobby{PlayerCh: make(chan PlayUnit), StartGame: make(chan bool, 1)}
+	l := &Lobby{PlayerCh: make(chan *PlayUnit)}
 	return l
 }
 
@@ -23,26 +23,36 @@ type top struct {
 	place  int
 	rating int32
 }
+type Ctrl struct {
+	Place   int    `json:"Place"`
+	CtrlBet int    `json:"CtrlBet,omitempty"`
+	User_id string `json:"UserId,omitempty"`
+	plr     *PlayUnit
+}
 
 type Lobby struct {
-	PlayersRing                                 //
-	m            *csmap.CsMap[string, PlayUnit] // id to place mapping
+	PlayersRing
+	m            *csmap.CsMap[string, *PlayUnit] // id to place mapping
 	GameMtx      sync.RWMutex
-	PlayerCh     chan PlayUnit
+	HasBegun     bool
+	PlayerCh     chan *PlayUnit
 	checkTimeout *time.Ticker
 	lastResponse time.Time
-	StartGame    chan bool
-	BroadcastCh  chan PlayUnit
+	ValidateCh   chan Ctrl
+	BroadcastCh  chan *PlayUnit
 	Shutdown     chan bool
 	Url          uint64
-	PlayerOut    func([]PlayUnit)
+	Validate     func(Ctrl)
 }
 
 func (l *Lobby) LobbyStart(yield func(PlayUnit) bool) {
+	if l.Validate == nil {
+		return
+	}
 	l.checkTimeout = time.NewTicker(time.Minute * 5)
-	l.Shutdown = make(chan bool, 2)
-	l.BroadcastCh = make(chan PlayUnit)
-	l.PlayerCh = make(chan PlayUnit)
+	l.Shutdown = make(chan bool, 3)
+	l.BroadcastCh = make(chan *PlayUnit, 10)
+	l.PlayerCh = make(chan *PlayUnit)
 	timeout := time.Minute * 4
 	for {
 		select {
@@ -52,15 +62,8 @@ func (l *Lobby) LobbyStart(yield func(PlayUnit) bool) {
 					l.Shutdown <- true
 				}
 			}
-		case <-l.StartGame:
-			ok := l.GameMtx.TryLock() // trying to check if there already a game in progress
-			if ok {
-				go func() {
-					g := Game{Lobby: l}
-					g.Game()
-					defer l.GameMtx.Unlock()
-				}()
-			}
+		case ctrl := <-l.ValidateCh:
+			l.Validate(ctrl)
 		case <-l.Shutdown:
 			return
 		}
@@ -73,19 +76,20 @@ func (l *Lobby) Broadcast() {
 	for pb := range l.BroadcastCh {
 		l.lastResponse = time.Now()
 		for v := range l.PlayerIter {
+			protect := false
 			if pb.Place != v.Place || !pb.Exposed {
-				pb = v.PrivateSend()
+				protect = true
 			}
-			v.Conn.WriteJSON(pb)
+			v.Send(pb, protect)
 			pb.Exposed = false
 		}
 	}
 }
-func (l *Lobby) PlayerIter(yield func(PlayUnit) bool) {
+func (l *Lobby) PlayerIter(yield func(*PlayUnit) bool) {
 	for _, pl := range l.Players { /// players
 		yield(pl)
 	}
-	l.m.Range(func(key string, val PlayUnit) (stop bool) { // spectators
+	l.m.Range(func(key string, val *PlayUnit) (stop bool) { // spectators
 		yield(val)
 		return
 	})

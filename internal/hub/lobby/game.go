@@ -11,13 +11,14 @@ import (
 
 type Game struct {
 	*Lobby
-	Deck       *poker.Deck
-	Board      PlayUnit     //
-	SmallBlind int          //
-	MaxBet     int          //
-	TurnTicker *time.Ticker //
-	BlindTimer *time.Timer  //
-	stop       chan bool
+	Deck        *poker.Deck
+	Board       *PlayUnit    //
+	SmallBlind  int          //
+	MaxBet      int          //
+	TurnTicker  *time.Ticker //
+	BlindTimer  *time.Timer  //
+	StartGameCh chan bool
+	stop        chan bool
 }
 
 func (g *Game) timerTillBlind() {
@@ -38,7 +39,8 @@ func (g *Game) tickerTillNextTurn() {
 		case <-g.TurnTicker.C:
 			timevalue++
 			idx := g.PlayersRing.Idx
-			g.BroadcastCh <- g.Players[idx].SendTimeValue(timevalue)
+			g.Players[idx].ValueSec = timevalue
+			g.BroadcastCh <- g.Players[idx]
 			if timevalue >= g.Players[idx].ExpirySec {
 				g.Players[idx].ExpirySec /= 2
 				g.TurnTicker.Stop()
@@ -50,6 +52,21 @@ func (g *Game) tickerTillNextTurn() {
 	}
 }
 func (g *Game) Game() {
+	for {
+		select {
+		case <-g.StartGameCh:
+			g.StartGame()
+		case <-g.PlayerCh:
+		case <-g.Shutdown:
+			return
+		}
+	}
+
+}
+func (g *Game) StartGame() {
+	for len(g.PlayerCh) > 0 {
+		<-g.PlayerCh
+	}
 	var stages int
 	g.stop = make(chan bool, 2)
 	rand.New(rand.NewSource(int64(new(maphash.Hash).Sum64()))).Shuffle(len(g.PlayersRing.Players), func(i, j int) {
@@ -119,8 +136,8 @@ func (g *Game) Game() {
 }
 func (g *Game) PostRiver() (gameOver bool) {
 	g.CalcWinners()
-	newPlayers := make([]PlayUnit, 0, 8)
-	elims := make([]PlayUnit, 0, 8)
+	newPlayers := make([]*PlayUnit, 0, 8)
+	elims := make([]*PlayUnit, 0, 8)
 	for _, v := range g.Players {
 		if v.Bankroll > 0 {
 			newPlayers = append(newPlayers, v)
@@ -148,7 +165,6 @@ func (g *Game) DealNewHand() {
 		v.Cards = g.Deck.Draw(2)
 		v.Place = i
 	}
-	g.Board = PlayUnit{}
 	g.Board.Cards = make([]poker.Card, 0, 7)
 
 	g.Players[g.PlayersRing.Next(1)].Bet = g.SmallBlind
