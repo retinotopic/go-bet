@@ -35,13 +35,3 @@ type PlayUnit struct {
 	Message   string       `json:"Message,omitempty"`
 	User_id   string       `json:"UserId,omitempty"`
 }
-
-func (p *PlayUnit) Send(pb *PlayUnit, protect bool) {
-	var temp []poker.Card
-	if protect {
-		temp = pb.Cards
-		pb.Cards = []poker.Card{}
-	}
-	p.Conn.WriteJSON(pb)
-	pb.Cards = temp
-}

@@ -21,17 +21,6 @@ type Game struct {
 	stop        chan bool
 }
 
-func (g *Game) timerTillBlind() {
-	for {
-		select {
-		case <-g.BlindTimer.C:
-			g.SmallBlind *= 2
-			g.BlindTimer.Reset(time.Minute * 5)
-		case <-g.stop:
-			return
-		}
-	}
-}
 func (g *Game) tillTurnOrBlind() {
 	timevalue := 0
 	for {

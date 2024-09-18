@@ -9,9 +9,8 @@ import (
 
 type CustomImpl struct {
 	*Game
-	AdminOnce  sync.Once
-	Admin      *PlayUnit
-	ValidateCh chan Ctrl
+	AdminOnce sync.Once
+	Admin     *PlayUnit
 }
 
 func (c *CustomImpl) Validate(ctrl Ctrl) {

@@ -3,6 +3,7 @@ package lobby
 import (
 	"time"
 
+	"github.com/chehsunliu/poker"
 	csmap "github.com/mhmtszr/concurrent-swiss-map"
 )
 
@@ -56,23 +57,25 @@ func (l *Lobby) LobbyStart(yield func(PlayUnit) bool) {
 		select {
 		case <-l.checkTimeout.C:
 			if time.Since(l.lastResponse) > timeout {
-				for range 2 { //shutdowns,one for game and one for lobby
+				for range 3 { //shutdowns,one for game and one for lobby
 					l.Shutdown <- true
 				}
 			}
 		case pb, ok := <-l.BroadcastCh:
 			if ok {
 				l.lastResponse = time.Now()
-				go func() {
-					for v := range l.PlayerIter {
-						protect := false
-						if pb.Place != v.Place || !pb.Exposed {
-							protect = true
-						}
-						v.Send(pb, protect)
-						pb.Exposed = false
+				pb.Conn.WriteJSON(pb)
+				go func(pb PlayUnit, exposed bool) {
+					if !exposed {
+						pb.Cards = []poker.Card{}
 					}
-				}()
+					for v := range l.PlayerIter {
+						if v.Place != pb.Place {
+							go v.Conn.WriteJSON(&pb)
+						}
+					}
+				}(*pb, pb.Exposed)
+				pb.Exposed = false
 			}
 		case ctrl := <-l.ValidateCh:
 			l.Validate(ctrl)
