@@ -57,7 +57,7 @@ func (l *Lobby) LobbyStart(yield func(PlayUnit) bool) {
 		select {
 		case <-l.checkTimeout.C:
 			if time.Since(l.lastResponse) > timeout {
-				for range 3 { //shutdowns,one for game and one for lobby
+				for range 3 { //shutdowns,two for game and one for lobby
 					l.Shutdown <- true
 				}
 			}
@@ -74,8 +74,8 @@ func (l *Lobby) LobbyStart(yield func(PlayUnit) bool) {
 							go v.Conn.WriteJSON(&pb)
 						}
 					}
-				}(*pb, pb.Exposed)
-				pb.Exposed = false
+				}(*pb, pb.Exposed) //copy to prevent modification from the rest of the goroutines
+
 			}
 		case ctrl := <-l.ValidateCh:
 			l.Validate(ctrl)

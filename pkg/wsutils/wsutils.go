@@ -19,7 +19,7 @@ func KeepAlive(c *websocket.Conn, timeout time.Duration) error {
 		if err != nil {
 			return err
 		}
-		time.Sleep(timeout / 2)
+		time.Sleep(timeout)
 		if time.Since(lastResponse) > timeout {
 			c.Close()
 			return fmt.Errorf("connection timeout")

@@ -62,7 +62,8 @@ func (g *Game) StartGame() {
 	}
 	var stages int
 	g.stop = make(chan bool, 1)
-	rand.New(rand.NewSource(int64(new(maphash.Hash).Sum64()))).Shuffle(len(g.PlayersRing.Players), func(i, j int) {
+	randsrc := rand.NewSource(int64(new(maphash.Hash).Sum64()))
+	rand.New(randsrc).Shuffle(len(g.PlayersRing.Players), func(i, j int) {
 		g.Players[i], g.Players[j] = g.Players[j], g.Players[i]
 	})
 	g.DealNewHand()

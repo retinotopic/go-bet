@@ -16,17 +16,19 @@ func (rs *PlayersRing) Next(offset int) int {
 }
 
 type PlayUnit struct {
-	Exposed   bool `json:"Exposed,omitempty"`
-	IsFold    bool `json:"IsFold,omitempty"`
-	HasActed  bool `json:"HasActed,omitempty"`
-	Admin     bool `json:"IsAdmin,omitempty"`
-	IsRating  bool `json:"IsRating,omitempty"`
-	Rating    int  `json:"Rating,omitempty"`
-	Bankroll  int  `json:"Bankroll,omitempty"`
-	Bet       int  `json:"Bet,omitempty"`
-	CtrlBet   int  `json:"CtrlBet,omitempty"`
-	Place     int  `json:"Place"`
-	ValueSec  int  `json:"Time,omitempty"`
+	Exposed  bool `json:"Exposed,omitempty"` //means whether the cards should be shown to everyone
+	IsFold   bool `json:"IsFold,omitempty"`
+	HasActed bool `json:"HasActed,omitempty"`
+	Admin    bool `json:"IsAdmin,omitempty"`
+	IsRating bool `json:"IsRating,omitempty"`
+	Rating   int  `json:"Rating,omitempty"`
+	Bankroll int  `json:"Bankroll,omitempty"`
+	Bet      int  `json:"Bet,omitempty"`
+	CtrlBet  int  `json:"CtrlBet,omitempty"`
+	Place    int  `json:"Place"` //-1 means the player is not at the table
+	//0 means the table of cards itself, not the player
+	//and anything greater than 0 and less than 9 is the players at the table
+	ValueSec  int `json:"Time,omitempty"`
 	ExpirySec int
 	Conn      *websocket.Conn
 	URLlobby  uint64
