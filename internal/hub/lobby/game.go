@@ -32,7 +32,7 @@ func (g *Game) timerTillBlind() {
 		}
 	}
 }
-func (g *Game) tickerTillNextTurn() {
+func (g *Game) tillTurnOrBlind() {
 	timevalue := 0
 	for {
 		select {
@@ -46,6 +46,9 @@ func (g *Game) tickerTillNextTurn() {
 				g.TurnTicker.Stop()
 				g.PlayerCh <- g.Players[idx]
 			}
+		case <-g.BlindTimer.C:
+			g.SmallBlind *= 2
+			g.BlindTimer.Reset(time.Minute * 5)
 		case <-g.stop:
 			return
 		}
@@ -69,18 +72,16 @@ func (g *Game) StartGame() {
 		<-g.PlayerCh
 	}
 	var stages int
-	g.stop = make(chan bool, 2)
+	g.stop = make(chan bool, 1)
 	rand.New(rand.NewSource(int64(new(maphash.Hash).Sum64()))).Shuffle(len(g.PlayersRing.Players), func(i, j int) {
 		g.Players[i], g.Players[j] = g.Players[j], g.Players[i]
 	})
 	g.DealNewHand()
 
 	g.TurnTicker = time.NewTicker(time.Second * 1)
-	go g.tickerTillNextTurn()
 	g.BlindTimer = time.NewTimer(time.Minute * 5)
-	go g.timerTillBlind()
+	go g.tillTurnOrBlind()
 	defer func() { // prevent goroutine leakage
-		g.stop <- true
 		g.stop <- true
 	}()
 	for {
@@ -202,6 +203,7 @@ func (g *Game) CalcWinners() {
 		pl.Bankroll += share
 		pl.Exposed = true
 		g.BroadcastCh <- pl
+		pl.Exposed = false
 	}
 	time.Sleep(time.Second * 4)
 }
