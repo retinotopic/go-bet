@@ -1,7 +1,6 @@
 package lobby
 
 import (
-	"sync"
 	"time"
 
 	csmap "github.com/mhmtszr/concurrent-swiss-map"
@@ -33,7 +32,6 @@ type Ctrl struct {
 type Lobby struct {
 	PlayersRing
 	m            *csmap.CsMap[string, *PlayUnit] // id to place mapping
-	GameMtx      sync.RWMutex
 	HasBegun     bool
 	PlayerCh     chan *PlayUnit
 	checkTimeout *time.Ticker
@@ -62,6 +60,20 @@ func (l *Lobby) LobbyStart(yield func(PlayUnit) bool) {
 					l.Shutdown <- true
 				}
 			}
+		case pb, ok := <-l.BroadcastCh:
+			if ok {
+				l.lastResponse = time.Now()
+				go func() {
+					for v := range l.PlayerIter {
+						protect := false
+						if pb.Place != v.Place || !pb.Exposed {
+							protect = true
+						}
+						v.Send(pb, protect)
+						pb.Exposed = false
+					}
+				}()
+			}
 		case ctrl := <-l.ValidateCh:
 			l.Validate(ctrl)
 		case <-l.Shutdown:
@@ -71,20 +83,6 @@ func (l *Lobby) LobbyStart(yield func(PlayUnit) bool) {
 	}
 }
 
-// player broadcast method
-func (l *Lobby) Broadcast() {
-	for pb := range l.BroadcastCh {
-		l.lastResponse = time.Now()
-		for v := range l.PlayerIter {
-			protect := false
-			if pb.Place != v.Place || !pb.Exposed {
-				protect = true
-			}
-			v.Send(pb, protect)
-			pb.Exposed = false
-		}
-	}
-}
 func (l *Lobby) PlayerIter(yield func(*PlayUnit) bool) {
 	for _, pl := range l.Players { /// players
 		yield(pl)

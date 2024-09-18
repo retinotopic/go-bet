@@ -56,6 +56,7 @@ func (g *Game) Game() {
 		select {
 		case <-g.StartGameCh:
 			g.StartGame()
+			g.ValidateCh <- Ctrl{plr: g.Board}
 		case <-g.PlayerCh:
 		case <-g.Shutdown:
 			return

@@ -32,9 +32,6 @@ type LobbyImpler interface {
 }
 type HubPump struct {
 	lobby      *csmap.CsMap[uint64, LobbyImpler]
-	lMutex     sync.RWMutex
-	players    *csmap.CsMap[string, lobby.PlayUnit] // id to player
-	plrMutex   sync.RWMutex
 	reqPlayers chan lobby.PlayUnit
 	wg         sync.WaitGroup
 }
