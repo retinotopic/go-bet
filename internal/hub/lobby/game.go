@@ -12,29 +12,22 @@ import (
 type Game struct {
 	*Lobby
 	Deck        *poker.Deck
-	Board       *PlayUnit    //
-	SmallBlind  int          //
-	MaxBet      int          //
-	TurnTicker  *time.Ticker //
-	BlindTimer  *time.Timer  //
+	Board       *PlayUnit   //
+	SmallBlind  int         //
+	MaxBet      int         //
+	TurnTimer   *time.Timer //
+	BlindTimer  *time.Timer //
 	StartGameCh chan bool
 	stop        chan bool
 }
 
 func (g *Game) tillTurnOrBlind() {
-	timevalue := 0
 	for {
 		select {
-		case <-g.TurnTicker.C:
-			timevalue++
+		case <-g.TurnTimer.C:
 			idx := g.PlayersRing.Idx
-			g.Players[idx].ValueSec = timevalue
-			g.BroadcastCh <- g.Players[idx]
-			if timevalue >= g.Players[idx].ExpirySec {
-				g.Players[idx].ExpirySec /= 2
-				g.TurnTicker.Stop()
-				g.PlayerCh <- g.Players[idx]
-			}
+			g.Players[idx].ExpirySec /= 2
+			g.PlayerCh <- g.Players[idx]
 		case <-g.BlindTimer.C:
 			g.SmallBlind *= 2
 			g.BlindTimer.Reset(time.Minute * 5)
@@ -55,7 +48,7 @@ func (g *Game) Game() {
 				g.Players[i], g.Players[j] = g.Players[j], g.Players[i]
 			})
 			g.DealNewHand()
-			g.TurnTicker = time.NewTicker(time.Second * 1)
+			g.TurnTimer = time.NewTimer(time.Second * 30)
 			g.BlindTimer = time.NewTimer(time.Minute * 5)
 			go g.tillTurnOrBlind()
 			defer func() { // prevent goroutine leakage
@@ -65,8 +58,8 @@ func (g *Game) Game() {
 				select {
 				case pl, ok := <-g.PlayerCh:
 					if pl.Place == g.PlayersRing.Idx && ok {
-						g.TurnTicker.Stop()
-
+						g.TurnTimer.Stop()
+						pl.ValueSec = 0
 						pl.Bet = pl.Bet + pl.CtrlBet
 						pl.Bankroll -= pl.CtrlBet
 
@@ -79,7 +72,8 @@ func (g *Game) Game() {
 						g.BroadcastCh <- pl
 
 						pl.HasActed = true
-						g.PlayersRing.Next(1)
+
+						pl = g.Players[g.PlayersRing.Next(1)]
 						for pl.IsFold {
 							pl = g.Players[g.PlayersRing.Next(1)]
 						}
@@ -105,8 +99,9 @@ func (g *Game) Game() {
 							}
 							stages++
 						}
-
-						g.TurnTicker.Reset(time.Second * 30)
+						g.Players[pl.Place].ValueSec = time.Now().Add(time.Second * 30).Unix()
+						g.TurnTimer.Reset(time.Second * 30)
+						g.BroadcastCh <- pl
 					}
 				case <-g.Shutdown:
 					GAME_LOOP = false
@@ -156,7 +151,7 @@ func (g *Game) DealNewHand() {
 
 	g.Players[g.PlayersRing.Next(1)].Bet = g.SmallBlind
 	g.Players[g.PlayersRing.Next(1)].Bet = g.SmallBlind * 2
-	g.PlayersRing.Next(1)
+	g.Players[g.PlayersRing.Next(1)].ValueSec = time.Now().Add(time.Second * 30).Unix()
 	//send all players to all players (broadcast)
 	for _, pl := range g.Players {
 		g.BroadcastCh <- pl

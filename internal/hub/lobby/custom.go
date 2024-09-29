@@ -24,7 +24,7 @@ func (c *CustomImpl) Validate(ctrl Ctrl) {
 				c.PlayerCh <- ctrl.plr
 			} else if ctrl.plr.Place == 0 {
 				c.HasBegun = false
-				//if the game is in progress and the playunit of the board itself comes into the channel, then the game is completely finished
+				//if the game is in progress and the playunit of the board itself comes into the channel, then the current game is finished
 			}
 		}
 	} else {
