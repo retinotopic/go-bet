@@ -25,16 +25,16 @@ type top struct {
 }
 type Ctrl struct {
 	Place   int    `json:"Place"`
-	CtrlBet int    `json:"CtrlBet,omitempty"`
-	User_id string `json:"UserId,omitempty"`
-	plr     *PlayUnit
+	CtrlBet int    `json:"CtrlBet"`
+	Message string `json:"Message"`
+	Plr     *PlayUnit
 }
 
 type Lobby struct {
 	PlayersRing
 	m            *csmap.CsMap[string, *PlayUnit] // id to place mapping
 	HasBegun     bool
-	PlayerCh     chan *PlayUnit
+	PlayerCh     chan Ctrl
 	checkTimeout *time.Ticker
 	lastResponse time.Time
 	ValidateCh   chan Ctrl
@@ -48,10 +48,10 @@ func (l *Lobby) LobbyStart(yield func(PlayUnit) bool) {
 	if l.Validate == nil {
 		return
 	}
-	l.checkTimeout = time.NewTicker(time.Minute * 5)
+	l.checkTimeout = time.NewTicker(time.Minute * 3)
 	l.Shutdown = make(chan bool, 3)
 	l.BroadcastCh = make(chan *PlayUnit, 10)
-	l.PlayerCh = make(chan *PlayUnit)
+	l.PlayerCh = make(chan Ctrl)
 	timeout := time.Minute * 4
 	for {
 		select {
@@ -74,8 +74,7 @@ func (l *Lobby) LobbyStart(yield func(PlayUnit) bool) {
 							go v.Conn.WriteJSON(&pb)
 						}
 					}
-				}(*pb, pb.Exposed) //copy to prevent modification from the rest of the goroutines
-
+				}(*pb, pb.IsExposed) //copy to prevent modification from the rest of the goroutines
 			}
 		case ctrl := <-l.ValidateCh:
 			l.Validate(ctrl)

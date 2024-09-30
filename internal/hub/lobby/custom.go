@@ -16,19 +16,15 @@ type CustomImpl struct {
 
 func (c *CustomImpl) Validate(ctrl Ctrl) {
 	if c.HasBegun {
-		//when the game is in progress, a validation is made to ensure that the bet itself cannot exceed the bank
-		if ctrl.CtrlBet <= ctrl.plr.Bankroll && ctrl.CtrlBet >= 0 {
-			if ctrl.plr.Place > 0 {
-				ctrl.plr.CtrlBet = ctrl.CtrlBet
-				ctrl.plr.ExpirySec = 30
-				c.PlayerCh <- ctrl.plr
-			} else if ctrl.plr.Place == 0 {
-				c.HasBegun = false
-				//if the game is in progress and the playunit of the board itself comes into the channel, then the current game is finished
-			}
+		if ctrl.Plr.Place > 0 {
+			ctrl.Plr.IsAway = false
+			c.PlayerCh <- ctrl
+		} else if ctrl.Plr.Place == 0 {
+			c.HasBegun = false
+			//if the game is in progress and the playunit of the board itself comes into the channel, then the current game is finished
 		}
 	} else {
-		if c.Admin == ctrl.plr {
+		if c.Admin == ctrl.Plr {
 			//admin started the game, and also place 0 represents the table of cards itself
 			if ctrl.Place == 0 {
 				c.HasBegun = true
@@ -43,25 +39,24 @@ func (c *CustomImpl) Validate(ctrl Ctrl) {
 				})
 				c.StartGameCh <- true
 			} else {
-				pl, ok := c.m.Load(ctrl.plr.User_id) // admin approves player seat
+				pl, ok := c.m.Load(ctrl.Plr.User_id) // admin approves player seat
 				if ok {
 					pl.Place = ctrl.Place
-					c.BroadcastCh <- ctrl.plr
+					c.BroadcastCh <- ctrl.Plr
 				}
 			}
 		} else if ctrl.Place > 0 && ctrl.Place <= 8 {
 			//player's request to be at the table
-			c.Admin.Conn.WriteJSON(ctrl.plr)
+			c.Admin.Conn.WriteJSON(ctrl.Plr)
 		} else if ctrl.Place == -1 {
 			//player leaves the table
-			pl, ok := c.m.Load(ctrl.plr.User_id)
+			pl, ok := c.m.Load(ctrl.Plr.User_id)
 			if ok {
 				pl.Place = ctrl.Place
-				c.BroadcastCh <- ctrl.plr
+				c.BroadcastCh <- ctrl.Plr
 			}
 		}
 	}
-
 }
 func (c *CustomImpl) HandleConn(plr *PlayUnit) {
 	go wsutils.KeepAlive(plr.Conn, time.Second*15)
@@ -81,7 +76,6 @@ func (c *CustomImpl) HandleConn(plr *PlayUnit) {
 		pb := *v
 		pb.Cards = []poker.Card{}
 		plr.Conn.WriteJSON(pb)
-
 	}
 	for { // listening for actions
 		ctrl := Ctrl{}
@@ -89,7 +83,7 @@ func (c *CustomImpl) HandleConn(plr *PlayUnit) {
 		if err != nil {
 			break
 		}
-		ctrl.plr = plr
+		ctrl.Plr = plr
 		c.ValidateCh <- ctrl
 	}
 }

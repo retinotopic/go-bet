@@ -26,8 +26,8 @@ func (g *Game) tillTurnOrBlind() {
 		select {
 		case <-g.TurnTimer.C:
 			idx := g.PlayersRing.Idx
-			g.Players[idx].ExpirySec /= 2
-			g.PlayerCh <- g.Players[idx]
+			g.Players[idx].IsAway = true
+			g.PlayerCh <- Ctrl{Plr: g.Players[idx]}
 		case <-g.BlindTimer.C:
 			g.SmallBlind *= 2
 			g.BlindTimer.Reset(time.Minute * 5)
@@ -56,10 +56,16 @@ func (g *Game) Game() {
 			}()
 			for GAME_LOOP := true; GAME_LOOP; {
 				select {
-				case pl, ok := <-g.PlayerCh:
-					if pl.Place == g.PlayersRing.Idx && ok {
+				case ctrl, ok := <-g.PlayerCh:
+					if ok && ctrl.Plr.Place == g.PlayersRing.Idx {
 						g.TurnTimer.Stop()
-						pl.ValueSec = 0
+						if ctrl.CtrlBet <= ctrl.Plr.Bankroll && ctrl.CtrlBet >= 0 {
+							ctrl.Plr.CtrlBet = ctrl.CtrlBet
+						} else {
+							ctrl.Plr.CtrlBet = 0
+						}
+						pl := ctrl.Plr
+						pl.DeadlineTurn = 0
 						pl.Bet = pl.Bet + pl.CtrlBet
 						pl.Bankroll -= pl.CtrlBet
 
@@ -68,13 +74,15 @@ func (g *Game) Game() {
 						} else {
 							pl.IsFold = true
 						}
-
+						if pl.IsAway {
+							pl.TimeTurn = 7
+						}
 						g.BroadcastCh <- pl
 
 						pl.HasActed = true
 
 						pl = g.Players[g.PlayersRing.Next(1)]
-						for pl.IsFold {
+						for pl.IsFold && pl.IsAway {
 							pl = g.Players[g.PlayersRing.Next(1)]
 						}
 						if pl.Bet == g.MaxBet && pl.HasActed {
@@ -96,11 +104,15 @@ func (g *Game) Game() {
 							}
 							for _, v := range g.Players {
 								v.HasActed, v.IsFold = false, false
+								if !v.IsAway && v.TimeTurn < 20 {
+									v.TimeTurn += 5
+								}
 							}
 							stages++
 						}
-						g.Players[pl.Place].ValueSec = time.Now().Add(time.Second * 30).Unix()
-						g.TurnTimer.Reset(time.Second * 30)
+						dur := time.Duration(pl.TimeTurn)
+						pl.DeadlineTurn = time.Now().Add(time.Second * dur).Unix()
+						g.TurnTimer.Reset(time.Second * dur)
 						g.BroadcastCh <- pl
 					}
 				case <-g.Shutdown:
@@ -108,7 +120,7 @@ func (g *Game) Game() {
 					break
 				}
 			}
-			g.ValidateCh <- Ctrl{plr: g.Board}
+			g.ValidateCh <- Ctrl{Plr: g.Board}
 		case <-g.PlayerCh:
 		case <-g.Shutdown:
 			return
