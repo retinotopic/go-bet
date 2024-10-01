@@ -1,7 +1,6 @@
 package hub
 
 import (
-	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -54,11 +53,11 @@ func (h *HubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 	if ok {
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
-			log.Println(err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		plr := lobby.PlayUnit{User_id: user_id, Name: name, Conn: conn}
-		go lb.HandleConn(plr)
+
+		go lb.HandleConn(&lobby.PlayUnit{User_id: user_id, Name: name, Conn: conn})
 	}
 
 }

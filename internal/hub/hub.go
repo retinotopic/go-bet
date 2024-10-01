@@ -10,9 +10,9 @@ import (
 )
 
 func NewPump(lenBuffer int, queue lobby.Queue) *HubPump {
-	lm := csmap.Create[uint64, LobbyImpler]( // URL to lobby
-		csmap.WithShardCount[uint64, LobbyImpler](128),
-		csmap.WithSize[uint64, LobbyImpler](1000),
+	lm := csmap.Create[uint64, lobby.Lobby]( // URL to lobby
+		csmap.WithShardCount[uint64, lobby.Lobby](128),
+		csmap.WithSize[uint64, lobby.Lobby](1000),
 	)
 	plm := csmap.Create[string, string]( // user_id to lobby URL
 		csmap.WithShardCount[string, string](128),
@@ -23,13 +23,8 @@ func NewPump(lenBuffer int, queue lobby.Queue) *HubPump {
 	return hub
 }
 
-type LobbyImpler interface {
-	HandleConn(lobby.PlayUnit)
-	Broadcast()
-	LobbyStart()
-}
 type HubPump struct {
-	lobby      *csmap.CsMap[uint64, LobbyImpler]
+	lobby      *csmap.CsMap[uint64, lobby.Lobby]
 	players    *csmap.CsMap[string, string]
 	reqPlayers chan *lobby.PlayUnit
 	wg         sync.WaitGroup

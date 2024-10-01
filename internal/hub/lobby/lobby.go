@@ -19,10 +19,6 @@ const (
 	postriver
 )
 
-type top struct {
-	place  int
-	rating int32
-}
 type Ctrl struct {
 	IsExposed bool      `json:"-"` // means whether the cards should be shown to everyone
 	Place     int       `json:"Place"`
@@ -42,13 +38,11 @@ type Lobby struct {
 	BroadcastCh  chan Ctrl
 	Shutdown     chan bool
 	Url          uint64
-	Validate     func(Ctrl)
 }
 
-func (l *Lobby) LobbyStart(yield func(PlayUnit) bool) {
-	if l.Validate == nil {
-		return
-	}
+func (l *Lobby) LobbyStart() {
+	gm := &Game{Lobby: l}
+	go gm.Game()
 	l.checkTimeout = time.NewTicker(time.Minute * 3)
 	l.Shutdown = make(chan bool, 3)
 	l.BroadcastCh = make(chan Ctrl, 10)
@@ -77,6 +71,8 @@ func (l *Lobby) LobbyStart(yield func(PlayUnit) bool) {
 					for v := range l.PlayerIter {
 						if v.Place != pb.Place {
 							go v.Conn.WriteJSON(&pb)
+						} else {
+
 						}
 					}
 				}(*ctrl.Plr, ctrl.IsExposed) //copy to prevent modification from the rest of the goroutines
@@ -96,4 +92,35 @@ func (l *Lobby) PlayerIter(yield func(*PlayUnit) bool) {
 		yield(val)
 		return
 	})
+}
+
+func (c *Lobby) HandleConn(plr *PlayUnit) {
+	c.m.SetIfAbsent(plr.User_id, plr)
+
+	defer func() {
+		if c.m.DeleteIf(plr.User_id, func(value *PlayUnit) bool { return value.Place == -1 }) { //if the seat is unoccupied, delete from map
+			c.BroadcastCh <- Ctrl{Plr: plr}
+		}
+		plr.Conn.Close()
+	}()
+	plr.Conn.WriteJSON(plr)
+	plr.Conn.WriteJSON(c.Board)
+	for _, v := range c.Players { // load current state of the game
+		pb := *v
+		if v != plr {
+			pb.Cards = []poker.Card{}
+			plr.Conn.WriteJSON(pb)
+		}
+
+	}
+	for { // listening for actions
+		ctrl := Ctrl{}
+		err := plr.Conn.ReadJSON(&ctrl)
+		if err != nil {
+			break
+		}
+		ctrl.Plr = plr
+		plr.IsAway = false
+		c.PlayerCh <- ctrl
+	}
 }

@@ -1,16 +1,12 @@
 package lobby
 
 import (
-	"fmt"
-	"log"
 	"math"
 	"time"
-
-	"github.com/retinotopic/go-bet/pkg/wsutils"
 )
 
 type RatingImpl struct {
-	*Lobby
+	*Game
 	q Queue
 }
 
@@ -22,7 +18,7 @@ type Queue interface {
 func (r *RatingImpl) tickerTillGame() {
 	timer := time.NewTimer(time.Second * 45)
 	for range timer.C {
-		r.StartGame <- true
+		r.StartGameCh <- true
 		return
 	}
 }
@@ -37,43 +33,5 @@ func (r *RatingImpl) PlayerOut(plr []PlayUnit, place int) {
 		}
 		plr.Conn.WriteJSON(plr)
 		plr.Conn.Close()
-	}
-}
-
-func (r *RatingImpl) HandleConn(plr PlayUnit) {
-	go wsutils.KeepAlive(plr.Conn, time.Second*15)
-
-	defer func() {
-
-		if plr.Conn != nil {
-			err := plr.Conn.Close()
-			if err != nil {
-				log.Println(err, "error closing connection")
-			}
-		}
-	}()
-
-	for _, v := range l.Players { // load current state of the game
-		if v.Place != plr.Place {
-			v = v.PrivateSend()
-		}
-		err := plr.Conn.WriteJSON(v)
-		if err != nil {
-			fmt.Println(err, "WriteJSON start")
-		}
-		fmt.Println("start")
-	}
-	for {
-		ctrl := PlayUnit{}
-		err := plr.Conn.ReadJSON(&ctrl)
-		if err != nil {
-			log.Println(err, "conn read error")
-			break
-		}
-		if ctrl.CtrlBet <= plr.Bankroll && ctrl.CtrlBet >= 0 {
-			plr.CtrlBet = ctrl.CtrlBet
-			plr.ExpirySec = 30
-			l.PlayerCh <- plr
-		}
 	}
 }
