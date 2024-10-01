@@ -7,11 +7,6 @@ import (
 	csmap "github.com/mhmtszr/concurrent-swiss-map"
 )
 
-func NewLobby(queue Queue) *Lobby {
-	l := &Lobby{PlayerCh: make(chan *PlayUnit)}
-	return l
-}
-
 const (
 	flop = iota
 	turn

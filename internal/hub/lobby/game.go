@@ -177,7 +177,7 @@ func (g *Game) DealNewHand() {
 	pl := g.PlayersRing.Next(1)
 
 	g.Board.DeadlineTurn = time.Now().Add(time.Second * time.Duration(pl.TimeTurn)).Unix()
-
+	g.BroadcastCh <- Ctrl{Brd: g.Board}
 	//send all players to all players (broadcast)
 	for _, pl := range g.Players {
 		g.BroadcastCh <- Ctrl{Plr: pl}

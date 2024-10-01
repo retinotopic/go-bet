@@ -9,6 +9,7 @@ type GameBoard struct {
 	Bank          int          `json:"Bank"`
 	TillNextBlind int          `json:"TillNextBlind"`
 	TurnPlace     int          `json:"TurnPlace"`
+	DealerPlace   int          `json:"DealerPlace"`
 	DeadlineTurn  int64        `json:"DeadlineTurn"` // deadline date (unix seconds)
 	CurrentBlind  int          `json:"CurrentBlind"`
 	Cards         []poker.Card `json:"Cards"`

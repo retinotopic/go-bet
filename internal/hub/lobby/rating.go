@@ -2,6 +2,7 @@ package lobby
 
 import (
 	"math"
+	"strconv"
 	"time"
 )
 
@@ -27,11 +28,17 @@ func (r *RatingImpl) PlayerOut(plr []PlayUnit, place int) {
 	middlePlace := float64(len(r.Players)+1) / 2
 	for _, plr := range plr {
 		rating := int(math.Round(float64(baseChange) * (middlePlace - float64(place)) / (middlePlace - 1)))
-		data, err := r.q.NewMessage(plr.User_id, rating)
+		userid, err := strconv.Atoi(plr.User_id)
+		data, err := r.q.NewMessage(userid, rating)
 		if err != nil {
 			r.q.PublishTask(data, 5)
 		}
 		plr.Conn.WriteJSON(plr)
 		plr.Conn.Close()
+	}
+	if place == 1 {
+		for range 3 {
+			r.Shutdown <- true
+		}
 	}
 }
