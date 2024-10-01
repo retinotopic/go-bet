@@ -24,10 +24,11 @@ type top struct {
 	rating int32
 }
 type Ctrl struct {
-	Place   int    `json:"Place"`
-	CtrlBet int    `json:"CtrlBet"`
-	Message string `json:"Message"`
-	Plr     *PlayUnit
+	IsExposed bool      `json:"-"` // means whether the cards should be shown to everyone
+	Place     int       `json:"Place"`
+	CtrlBet   int       `json:"CtrlBet"`
+	Message   string    `json:"Message"`
+	Plr       *PlayUnit `json:"-"`
 }
 
 type Lobby struct {
@@ -38,7 +39,7 @@ type Lobby struct {
 	checkTimeout *time.Ticker
 	lastResponse time.Time
 	ValidateCh   chan Ctrl
-	BroadcastCh  chan *PlayUnit
+	BroadcastCh  chan Ctrl
 	Shutdown     chan bool
 	Url          uint64
 	Validate     func(Ctrl)
@@ -50,7 +51,7 @@ func (l *Lobby) LobbyStart(yield func(PlayUnit) bool) {
 	}
 	l.checkTimeout = time.NewTicker(time.Minute * 3)
 	l.Shutdown = make(chan bool, 3)
-	l.BroadcastCh = make(chan *PlayUnit, 10)
+	l.BroadcastCh = make(chan Ctrl, 10)
 	l.PlayerCh = make(chan Ctrl)
 	timeout := time.Minute * 4
 	for {
@@ -61,10 +62,14 @@ func (l *Lobby) LobbyStart(yield func(PlayUnit) bool) {
 					l.Shutdown <- true
 				}
 			}
-		case pb, ok := <-l.BroadcastCh:
+		case ctrl, ok := <-l.BroadcastCh:
 			if ok {
 				l.lastResponse = time.Now()
-				pb.Conn.WriteJSON(pb)
+				if len(ctrl.Message) != 0 && ctrl.Place > 0 { //
+					for v := range l.PlayerIter {
+						go v.Conn.WriteJSON(ctrl.Message)
+					}
+				}
 				go func(pb PlayUnit, exposed bool) {
 					if !exposed {
 						pb.Cards = []poker.Card{}
@@ -74,10 +79,8 @@ func (l *Lobby) LobbyStart(yield func(PlayUnit) bool) {
 							go v.Conn.WriteJSON(&pb)
 						}
 					}
-				}(*pb, pb.IsExposed) //copy to prevent modification from the rest of the goroutines
+				}(*ctrl.Plr, ctrl.IsExposed) //copy to prevent modification from the rest of the goroutines
 			}
-		case ctrl := <-l.ValidateCh:
-			l.Validate(ctrl)
 		case <-l.Shutdown:
 			return
 		}

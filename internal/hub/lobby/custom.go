@@ -2,10 +2,8 @@ package lobby
 
 import (
 	"sync"
-	"time"
 
 	"github.com/chehsunliu/poker"
-	"github.com/retinotopic/go-bet/pkg/wsutils"
 )
 
 type CustomImpl struct {
@@ -15,51 +13,41 @@ type CustomImpl struct {
 }
 
 func (c *CustomImpl) Validate(ctrl Ctrl) {
-	if c.HasBegun {
-		if ctrl.Plr.Place > 0 {
-			ctrl.Plr.IsAway = false
-			c.PlayerCh <- ctrl
-		} else if ctrl.Plr.Place == 0 {
-			c.HasBegun = false
-			//if the game is in progress and the playunit of the board itself comes into the channel, then the current game is finished
-		}
-	} else {
-		if c.Admin == ctrl.Plr {
-			//admin started the game, and also place 0 represents the table of cards itself
-			if ctrl.Place == 0 {
-				c.HasBegun = true
-				i := 0
-				//at game start add occupied seats at the table to players
-				c.m.Range(func(key string, val *PlayUnit) (stop bool) {
-					if val.Place > 0 {
-						c.Players[i] = val
-						i++
-					}
-					return
-				})
-				c.StartGameCh <- true
-			} else {
-				pl, ok := c.m.Load(ctrl.Plr.User_id) // admin approves player seat
-				if ok {
-					pl.Place = ctrl.Place
-					c.BroadcastCh <- ctrl.Plr
+	if c.Admin == ctrl.Plr {
+		//admin started the game, and also place 0 represents the table of cards itself
+		if ctrl.Place == 0 {
+			c.HasBegun = true
+			i := 0
+			//at game start add occupied seats at the table to players
+			c.m.Range(func(key string, val *PlayUnit) (stop bool) {
+				if val.Place > 0 {
+					c.Players[i] = val
+					i++
 				}
-			}
-		} else if ctrl.Place > 0 && ctrl.Place <= 8 {
-			//player's request to be at the table
-			c.Admin.Conn.WriteJSON(ctrl.Plr)
-		} else if ctrl.Place == -1 {
-			//player leaves the table
-			pl, ok := c.m.Load(ctrl.Plr.User_id)
+				return
+			})
+			c.StartGameCh <- true
+		} else {
+			pl, ok := c.m.Load(ctrl.Plr.User_id) // admin approves player seat
 			if ok {
 				pl.Place = ctrl.Place
 				c.BroadcastCh <- ctrl.Plr
 			}
 		}
+	} else if ctrl.Place > 0 && ctrl.Place <= 8 {
+		//player's request to be at the table
+		c.Admin.Conn.WriteJSON(ctrl.Plr)
+	} else if ctrl.Place == -1 {
+		//player leaves the table
+		pl, ok := c.m.Load(ctrl.Plr.User_id)
+		if ok {
+			pl.Place = ctrl.Place
+			c.BroadcastCh <- ctrl.Plr
+		}
 	}
+
 }
 func (c *CustomImpl) HandleConn(plr *PlayUnit) {
-	go wsutils.KeepAlive(plr.Conn, time.Second*15)
 	c.m.SetIfAbsent(plr.User_id, plr)
 
 	c.AdminOnce.Do(func() {
@@ -84,6 +72,7 @@ func (c *CustomImpl) HandleConn(plr *PlayUnit) {
 			break
 		}
 		ctrl.Plr = plr
-		c.ValidateCh <- ctrl
+		plr.IsAway = false
+		c.PlayerCh <- ctrl
 	}
 }
