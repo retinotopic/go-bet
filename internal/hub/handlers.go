@@ -56,7 +56,6 @@ func (h *HubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-
 		go lb.HandleConn(&lobby.PlayUnit{User_id: user_id, Name: name, Conn: conn})
 	}
 

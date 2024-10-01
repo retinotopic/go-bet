@@ -13,22 +13,20 @@ type top struct {
 	place  int
 	rating int32
 }
-type Implementator interface {
+type Implementor interface {
 	Validate(Ctrl)
-	PlayerOut([]*PlayUnit)
+	PlayerOut([]*PlayUnit, int)
 }
 type Game struct {
 	*Lobby
 	Deck        *poker.Deck
-	DealerPlace int
-	Board       *PlayUnit   //
 	SmallBlind  int         //
 	MaxBet      int         //
 	TurnTimer   *time.Timer //
 	BlindTimer  *time.Timer //
 	StartGameCh chan bool
 	stop        chan bool
-	Impl        Implementator
+	Impl        Implementor
 }
 
 func (g *Game) tillTurnOrBlind() {
@@ -52,8 +50,7 @@ func (g *Game) Game() {
 		select {
 		case <-g.StartGameCh:
 			var stages int
-			g.DealerPlace = 0
-			g.Board.Place = -1
+			g.Board.DealerPlace = 0
 			g.stop = make(chan bool, 1)
 			randsrc := rand.NewSource(int64(new(maphash.Hash).Sum64()))
 			rand.New(randsrc).Shuffle(len(g.PlayersRing.Players), func(i, j int) { // shuffle player seats
@@ -70,14 +67,15 @@ func (g *Game) Game() {
 				select {
 				case ctrl, ok := <-g.PlayerCh:
 					if ok && ctrl.Plr.Place == g.PlayersRing.Idx {
+
 						g.TurnTimer.Stop()
-						if ctrl.CtrlBet > ctrl.Plr.Bankroll || ctrl.CtrlBet < 0 {
+						now := time.Now().Unix()
+						if ctrl.CtrlBet > ctrl.Plr.Bank || ctrl.CtrlBet < 0 {
 							ctrl.CtrlBet = 0
 						}
 						pl := ctrl.Plr
-						pl.DeadlineTurn = 0
 						pl.Bet = pl.Bet + ctrl.CtrlBet
-						pl.Bankroll -= ctrl.CtrlBet
+						pl.Bank -= ctrl.CtrlBet
 
 						if pl.Bet >= g.MaxBet {
 							g.MaxBet = pl.Bet
@@ -86,9 +84,16 @@ func (g *Game) Game() {
 							pl.IsFold = true
 						}
 
-						g.BroadcastCh <- Ctrl{Plr: pl}
-
+						if !pl.IsAway {
+							pl.TimeTurn += (now - g.Board.DeadlineTurn) + 10
+							if pl.TimeTurn > 30 {
+								pl.TimeTurn = 30
+							}
+						} else {
+							pl.TimeTurn = 10
+						}
 						pl.HasActed = true
+						g.BroadcastCh <- Ctrl{Plr: pl}
 
 						pl = g.PlayersRing.Next(1)
 
@@ -97,11 +102,9 @@ func (g *Game) Game() {
 							case flop: // preflop to flop
 								flopcard := g.Deck.Draw(3)
 								g.Board.Cards = append(g.Board.Cards, flopcard...)
-								g.BroadcastCh <- Ctrl{Plr: g.Board}
 							case turn, river: // flop to turn, turn to river
 								flopcard := g.Deck.Draw(1)
 								g.Board.Cards = append(g.Board.Cards, flopcard[0])
-								g.BroadcastCh <- Ctrl{Plr: g.Board}
 							case postriver:
 								if ok := g.PostRiver(); ok {
 									GAME_LOOP = false
@@ -115,9 +118,9 @@ func (g *Game) Game() {
 							stages++
 						}
 						dur := time.Duration(pl.TimeTurn)
-						pl.DeadlineTurn = time.Now().Add(time.Second * dur).Unix()
+						g.Board.DeadlineTurn = time.Now().Add(time.Second * dur).Unix()
 						g.TurnTimer.Reset(time.Second * dur)
-						g.BroadcastCh <- Ctrl{Plr: pl}
+						g.BroadcastCh <- Ctrl{Brd: g.Board}
 					}
 				case <-g.Shutdown:
 					GAME_LOOP = false
@@ -136,21 +139,19 @@ func (g *Game) PostRiver() (gameOver bool) {
 	newPlayers := make([]*PlayUnit, 0, 8)
 	elims := make([]*PlayUnit, 0, 8)
 	for _, v := range g.Players {
-		if v.Bankroll > 0 {
+		if v.Bank > 0 {
 			newPlayers = append(newPlayers, v)
 		} else {
 			elims = append(elims, v)
 			v.Place = -1
 		}
 	}
+	g.Impl.PlayerOut(elims, len(g.Players))
+	g.Players = newPlayers
+	g.Idx -= len(elims)
 	if len(newPlayers) == 1 {
-		g.Impl.PlayerOut(newPlayers)
+		g.Impl.PlayerOut(newPlayers, 1)
 		return true
-
-	} else if len(elims) != 0 {
-		g.Impl.PlayerOut(elims)
-		g.Players = newPlayers
-		g.Idx -= len(elims)
 	}
 	g.DealNewHand()
 	return
@@ -165,21 +166,19 @@ func (g *Game) DealNewHand() {
 		v.Place = i
 		v.IsFold = false
 		v.HasActed = false
-		if !v.IsAway && v.TimeTurn < 20 {
-			v.TimeTurn += 5
-		}
 	}
 	g.Board.Cards = make([]poker.Card, 0, 7)
 
-	g.DealerPlace = g.PlayersRing.NextDealer(g.DealerPlace, 1)
+	g.Board.DealerPlace = g.PlayersRing.NextDealer(g.Board.DealerPlace, 1)
 
 	g.PlayersRing.Next(1).Bet = g.SmallBlind
 	g.PlayersRing.Next(1).Bet = g.SmallBlind * 2
 
 	pl := g.PlayersRing.Next(1)
-	pl.DeadlineTurn = time.Now().Add(time.Second * time.Duration(pl.TimeTurn)).Unix()
-	//send all players to all players (broadcast)
 
+	g.Board.DeadlineTurn = time.Now().Add(time.Second * time.Duration(pl.TimeTurn)).Unix()
+
+	//send all players to all players (broadcast)
 	for _, pl := range g.Players {
 		g.BroadcastCh <- Ctrl{Plr: pl}
 	}
@@ -204,11 +203,11 @@ func (g *Game) CalcWinners() {
 	i := 0
 	for ; i == 0 || topPlaces[i].rating == topPlaces[i-1].rating; i++ {
 	}
-	share := g.Board.Bankroll / i
+	share := g.Board.Bank / i
 	for j := range i {
 		pl := g.Players[topPlaces[j].place]
-		pl.Bankroll += share
+		pl.Bank += share
 		g.BroadcastCh <- Ctrl{IsExposed: true, Plr: pl}
 	}
-	time.Sleep(time.Second * 4)
+	time.Sleep(time.Second * 5)
 }

@@ -19,12 +19,13 @@ const (
 	postriver
 )
 
-type Ctrl struct {
+type Ctrl struct { // broadcast control union
 	IsExposed bool      `json:"-"` // means whether the cards should be shown to everyone
 	Place     int       `json:"Place"`
 	CtrlBet   int       `json:"CtrlBet"`
-	Message   string    `json:"Message"`
+	Message   string    `json:"-"`
 	Plr       *PlayUnit `json:"-"`
+	Brd       GameBoard `json:"-"`
 }
 
 type Lobby struct {
@@ -98,7 +99,7 @@ func (c *Lobby) HandleConn(plr *PlayUnit) {
 	c.m.SetIfAbsent(plr.User_id, plr)
 
 	defer func() {
-		if c.m.DeleteIf(plr.User_id, func(value *PlayUnit) bool { return value.Place == -1 }) { //if the seat is unoccupied, delete from map
+		if c.m.DeleteIf(plr.User_id, func(value *PlayUnit) bool { return value.Place == -2 }) { //if the seat is unoccupied, delete from map
 			c.BroadcastCh <- Ctrl{Plr: plr}
 		}
 		plr.Conn.Close()

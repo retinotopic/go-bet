@@ -38,7 +38,7 @@ func (c *CustomImpl) Validate(ctrl Ctrl) {
 	} else if ctrl.Place >= 0 && ctrl.Place <= 7 {
 		//player's request to be at the table
 		c.Admin.Conn.WriteJSON(ctrl.Plr)
-	} else if ctrl.Place == -2 {
+	} else if ctrl.Place == -2 && ctrl.Plr.Place >= 0 {
 		//player leaves the table
 		pl, ok := c.m.Load(ctrl.Plr.User_id)
 		if ok {

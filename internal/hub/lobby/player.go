@@ -6,10 +6,12 @@ import (
 )
 
 type GameBoard struct {
-	Bank         int          `json:"Bank"`
-	Cards        []poker.Card `json:"Cards"`
-	Place        int          `json:"Place"`
-	DeadlineTurn int64        `json:"DeadlineTurn"` // deadline date (unix seconds)
+	Bank          int          `json:"Bank"`
+	TillNextBlind int          `json:"TillNextBlind"`
+	TurnPlace     int          `json:"TurnPlace"`
+	DeadlineTurn  int64        `json:"DeadlineTurn"` // deadline date (unix seconds)
+	CurrentBlind  int          `json:"CurrentBlind"`
+	Cards         []poker.Card `json:"Cards"`
 }
 
 type PlayersRing struct {
@@ -32,14 +34,11 @@ func (rs *PlayersRing) NextDealer(start, offset int) int {
 }
 
 type PlayUnit struct {
-	IsFold   bool `json:"IsFold"`
-	IsAway   bool `json:"IsAway"`
-	HasActed bool `json:"HasActed"`
-	Bank     int  `json:"Bank"`
-	Bet      int  `json:"Bet"`
-	/* -2 means the player is not at the table
-	-1 means the table of cards itself, not the player
-	and anything equal or greater than 0 and less than 8 is the players at the table*/
+	IsFold   bool            `json:"IsFold"`
+	IsAway   bool            `json:"IsAway"`
+	HasActed bool            `json:"HasActed"`
+	Bank     int             `json:"Bank"`
+	Bet      int             `json:"Bet"`
 	Place    int             `json:"Place"`
 	TimeTurn int64           `json:"TimeTurn"` // turn time in seconds
 	Conn     *websocket.Conn `json:"-"`
