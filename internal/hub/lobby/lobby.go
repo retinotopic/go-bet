@@ -1,6 +1,7 @@
 package lobby
 
 import (
+	"context"
 	"time"
 
 	"github.com/chehsunliu/poker"
@@ -14,13 +15,13 @@ const (
 	postriver
 )
 
-type Ctrl struct { // broadcast control union
-	IsExposed bool      `json:"-"` // means whether the cards should be shown to everyone
-	Place     int       `json:"Place"`
-	CtrlBet   int       `json:"CtrlBet"`
-	Message   string    `json:"-"`
-	Plr       *PlayUnit `json:"-"`
-	Brd       GameBoard `json:"-"`
+type Ctrl struct { //control union
+	IsExposed bool       `json:"-"` // means whether the cards should be shown to everyone
+	Place     int        `json:"Place"`
+	CtrlBet   int        `json:"CtrlBet"`
+	Message   string     `json:"-"`
+	Plr       *PlayUnit  `json:"-"`
+	Brd       *GameBoard `json:"-"`
 }
 
 type Lobby struct {
@@ -31,7 +32,6 @@ type Lobby struct {
 	checkTimeout *time.Ticker
 	lastResponse time.Time
 	ValidateCh   chan Ctrl
-	BroadcastCh  chan Ctrl
 	Shutdown     chan bool
 	Url          uint64
 }
@@ -41,7 +41,6 @@ func (l *Lobby) LobbyStart() {
 	go gm.Game()
 	l.checkTimeout = time.NewTicker(time.Minute * 3)
 	l.Shutdown = make(chan bool, 3)
-	l.BroadcastCh = make(chan Ctrl, 10)
 	l.PlayerCh = make(chan Ctrl)
 	timeout := time.Minute * 4
 	for {
@@ -51,27 +50,6 @@ func (l *Lobby) LobbyStart() {
 				for range 3 { //shutdowns,two for game and one for lobby
 					l.Shutdown <- true
 				}
-			}
-		case ctrl, ok := <-l.BroadcastCh:
-			if ok {
-				l.lastResponse = time.Now()
-				if len(ctrl.Message) != 0 && ctrl.Place > 0 { //
-					for v := range l.PlayerIter {
-						go v.Conn.WriteJSON(ctrl.Message)
-					}
-				}
-				go func(pb PlayUnit, exposed bool) {
-					if !exposed {
-						pb.Cards = []poker.Card{}
-					}
-					for v := range l.PlayerIter {
-						if v.Place != pb.Place {
-							go v.Conn.WriteJSON(&pb)
-						} else {
-
-						}
-					}
-				}(*ctrl.Plr, ctrl.IsExposed) //copy to prevent modification from the rest of the goroutines
 			}
 		case <-l.Shutdown:
 			return
@@ -94,9 +72,7 @@ func (c *Lobby) HandleConn(plr *PlayUnit) {
 	c.m.SetIfAbsent(plr.User_id, plr)
 
 	defer func() {
-		if c.m.DeleteIf(plr.User_id, func(value *PlayUnit) bool { return value.Place == -2 }) { //if the seat is unoccupied, delete from map
-			c.BroadcastCh <- Ctrl{Plr: plr}
-		}
+		c.m.DeleteIf(plr.User_id, func(value *PlayUnit) bool { return value.Place == -2 }) //if the seat is unoccupied, delete from map
 		plr.Conn.Close()
 	}()
 	plr.Conn.WriteJSON(plr)
@@ -111,7 +87,7 @@ func (c *Lobby) HandleConn(plr *PlayUnit) {
 	}
 	for { // listening for actions
 		ctrl := Ctrl{}
-		err := plr.Conn.ReadJSON(&ctrl)
+		_, data, err := plr.Conn.Read(context.TODO())
 		if err != nil {
 			break
 		}

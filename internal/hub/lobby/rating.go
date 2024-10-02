@@ -16,7 +16,7 @@ type Queue interface {
 	NewMessage(int, int) ([]byte, error)
 }
 
-func (r *RatingImpl) tickerTillGame() {
+func (r *RatingImpl) Validate(ctrl Ctrl) {
 	timer := time.NewTimer(time.Second * 45)
 	for range timer.C {
 		r.StartGameCh <- true

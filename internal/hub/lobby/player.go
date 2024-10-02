@@ -2,24 +2,36 @@ package lobby
 
 import (
 	"github.com/chehsunliu/poker"
-	"github.com/fasthttp/websocket"
+	"github.com/coder/websocket"
 )
 
 type GameBoard struct {
-	Bank          int          `json:"Bank"`
-	TillNextBlind int          `json:"TillNextBlind"`
-	TurnPlace     int          `json:"TurnPlace"`
-	DealerPlace   int          `json:"DealerPlace"`
-	DeadlineTurn  int64        `json:"DeadlineTurn"` // deadline date (unix seconds)
-	CurrentBlind  int          `json:"CurrentBlind"`
-	Cards         []poker.Card `json:"Cards"`
+	Bank        int          `json:"Bank"`
+	TurnPlace   int          `json:"TurnPlace"`
+	DealerPlace int          `json:"DealerPlace"`
+	Deadline    int64        `json:"Deadline"`
+	Blind       int          `json:"Blind"`
+	Cards       []poker.Card `json:"Cards"`
 }
 
 type PlayersRing struct {
-	Players []*PlayUnit
-	Idx     int
-	Board   GameBoard
+	Players  []*PlayUnit
+	Idx      int
+	Board    GameBoard
+	Blindlvl int
 }
+
+// blind is calculated via: initial player stack * stackShare[ i ]
+var stackShare = []float32{
+	0.01,
+	0.02,
+	0.03,
+	0.05,
+	0.075,
+	0.1,
+	0.15,
+	0.25,
+	0.3}
 
 func (rs *PlayersRing) Next(offset int) *PlayUnit {
 	pl := rs.Players[rs.Idx]

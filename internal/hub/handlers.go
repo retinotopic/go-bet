@@ -3,19 +3,12 @@ package hub
 import (
 	"net/http"
 	"strconv"
-	"time"
 	"unicode"
 
-	"github.com/fasthttp/websocket"
+	"github.com/coder/websocket"
 	"github.com/retinotopic/go-bet/internal/hub/lobby"
 	"github.com/retinotopic/go-bet/internal/middleware"
-	"github.com/retinotopic/go-bet/pkg/wsutils"
 )
-
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-}
 
 func (h *HubPump) FindGame(w http.ResponseWriter, r *http.Request) {
 	user_id, name := middleware.GetUser(r.Context())
@@ -29,13 +22,11 @@ func (h *HubPump) FindGame(w http.ResponseWriter, r *http.Request) {
 	if ok && len(url) != 0 {
 		w.Write([]byte(url))
 	} else {
-		conn, err := upgrader.Upgrade(w, r, nil)
+		conn, err := websocket.Accept(w, r, nil)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-
-		go wsutils.KeepAlive(conn, time.Second*15)
 		h.reqPlayers <- &lobby.PlayUnit{User_id: user_id, Name: name, Conn: conn}
 	}
 
@@ -51,7 +42,7 @@ func (h *HubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 
 	lb, ok := h.lobby.Load(wsurl)
 	if ok {
-		conn, err := upgrader.Upgrade(w, r, nil)
+		conn, err := websocket.Accept(w, r, nil)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return

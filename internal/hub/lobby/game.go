@@ -20,7 +20,6 @@ type Implementor interface {
 type Game struct {
 	*Lobby
 	Deck        *poker.Deck
-	SmallBlind  int         //
 	MaxBet      int         //
 	TurnTimer   *time.Timer //
 	BlindTimer  *time.Timer //
@@ -37,7 +36,7 @@ func (g *Game) tillTurnOrBlind() {
 			g.Players[idx].IsAway = true
 			g.PlayerCh <- Ctrl{Plr: g.Players[idx]}
 		case <-g.BlindTimer.C:
-			g.SmallBlind *= 2
+			g.Board.CurrentBlind *= 2
 			g.BlindTimer.Reset(time.Minute * 5)
 		case <-g.stop:
 			return
@@ -57,8 +56,8 @@ func (g *Game) Game() {
 				g.Players[i], g.Players[j] = g.Players[j], g.Players[i]
 			})
 			g.DealNewHand()
-			g.TurnTimer = time.NewTimer(time.Second * 30)
-			g.BlindTimer = time.NewTimer(time.Minute * 5)
+			g.TurnTimer = time.NewTimer(time.Second * 10)
+			g.BlindTimer = time.NewTimer(time.Duration(g.Board.Deadline) * time.Minute)
 			go g.tillTurnOrBlind()
 			defer func() { // prevent goroutine leakage
 				g.stop <- true
@@ -85,7 +84,7 @@ func (g *Game) Game() {
 						}
 
 						if !pl.IsAway {
-							pl.TimeTurn += (now - g.Board.DeadlineTurn) + 10
+							pl.TimeTurn += (now - g.Board.Deadline) + 7
 							if pl.TimeTurn > 30 {
 								pl.TimeTurn = 30
 							}
@@ -105,7 +104,7 @@ func (g *Game) Game() {
 							case turn, river: // flop to turn, turn to river
 								flopcard := g.Deck.Draw(1)
 								g.Board.Cards = append(g.Board.Cards, flopcard[0])
-							case postriver:
+							case postriver: //postriver evaluation
 								if ok := g.PostRiver(); ok {
 									GAME_LOOP = false
 								}
@@ -118,9 +117,9 @@ func (g *Game) Game() {
 							stages++
 						}
 						dur := time.Duration(pl.TimeTurn)
-						g.Board.DeadlineTurn = time.Now().Add(time.Second * dur).Unix()
+						g.Board.Deadline = time.Now().Add(time.Second * dur).Unix()
 						g.TurnTimer.Reset(time.Second * dur)
-						g.BroadcastCh <- Ctrl{Brd: g.Board}
+						g.BroadcastCh <- Ctrl{Brd: &g.Board}
 					}
 				case <-g.Shutdown:
 					GAME_LOOP = false
@@ -171,13 +170,13 @@ func (g *Game) DealNewHand() {
 
 	g.Board.DealerPlace = g.PlayersRing.NextDealer(g.Board.DealerPlace, 1)
 
-	g.PlayersRing.Next(1).Bet = g.SmallBlind
-	g.PlayersRing.Next(1).Bet = g.SmallBlind * 2
+	g.PlayersRing.Next(1).Bet = g.Board.CurrentBlind
+	g.PlayersRing.Next(1).Bet = g.Board.CurrentBlind * 2
 
 	pl := g.PlayersRing.Next(1)
 
-	g.Board.DeadlineTurn = time.Now().Add(time.Second * time.Duration(pl.TimeTurn)).Unix()
-	g.BroadcastCh <- Ctrl{Brd: g.Board}
+	g.Board.Deadline = time.Now().Add(time.Second * time.Duration(pl.TimeTurn)).Unix()
+	g.BroadcastCh <- Ctrl{Brd: &g.Board}
 	//send all players to all players (broadcast)
 	for _, pl := range g.Players {
 		g.BroadcastCh <- Ctrl{Plr: pl}
