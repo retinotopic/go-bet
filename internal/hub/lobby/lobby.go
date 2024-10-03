@@ -1,6 +1,7 @@
 package lobby
 
 import (
+	"bytes"
 	"context"
 	"time"
 
@@ -132,4 +133,19 @@ func writeTimeout(timeout time.Duration, c *websocket.Conn, msg []byte) error {
 	defer cancel()
 
 	return c.Write(ctx, websocket.MessageText, msg)
+}
+func EmptyCards(data []byte) (ok bool) { // in order to not marshaling twice, but for the cards to be empty
+	start := bytes.IndexByte(data, '[')
+	if start == -1 {
+		return false
+	}
+	start++
+	end := bytes.IndexByte(data, ']')
+	if end == -1 {
+		return false
+	}
+	for i := start; i < end; i++ {
+		data[i] = ' '
+	}
+	return true
 }
