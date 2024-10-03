@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/chehsunliu/poker"
+	"github.com/coder/websocket"
+	"github.com/goccy/go-json"
 	csmap "github.com/mhmtszr/concurrent-swiss-map"
 )
 
@@ -19,9 +21,9 @@ type Ctrl struct { //control union
 	IsExposed bool       `json:"-"` // means whether the cards should be shown to everyone
 	Place     int        `json:"Place"`
 	CtrlBet   int        `json:"CtrlBet"`
-	Message   string     `json:"-"`
+	Message   string     `json:"Message"`
 	Plr       *PlayUnit  `json:"-"`
-	Brd       *GameBoard `json:"-"`
+	Brd       *GameBoard `json:"GameBoard"`
 }
 
 type Lobby struct {
@@ -73,7 +75,7 @@ func (c *Lobby) HandleConn(plr *PlayUnit) {
 
 	defer func() {
 		c.m.DeleteIf(plr.User_id, func(value *PlayUnit) bool { return value.Place == -2 }) //if the seat is unoccupied, delete from map
-		plr.Conn.Close()
+		plr.Conn.CloseNow()
 	}()
 	plr.Conn.WriteJSON(plr)
 	plr.Conn.WriteJSON(c.Board)
@@ -91,8 +93,43 @@ func (c *Lobby) HandleConn(plr *PlayUnit) {
 		if err != nil {
 			break
 		}
+		err = json.Unmarshal(data, &ctrl)
+		if err != nil {
+			break
+		}
 		ctrl.Plr = plr
 		plr.IsAway = false
 		c.PlayerCh <- ctrl
 	}
+}
+func (c *Lobby) BroadcastPlayer(plr PlayUnit, isExposed bool) (err error) {
+	b, err := json.Marshal(plr)
+	if err != nil {
+		return err
+	}
+	go writeTimeout(time.Second*5, plr.Conn, b)
+	if !isExposed {
+		plr.Cards = []poker.Card{}
+	}
+	for pl := range c.PlayerIter {
+		go writeTimeout(time.Second*5, pl.Conn, b)
+	}
+	return
+}
+
+func (c *Lobby) BroadcastBoard(board *GameBoard) (err error) {
+	b, err := json.Marshal(board)
+	if err != nil {
+		return err
+	}
+	for pl := range c.PlayerIter {
+		go writeTimeout(time.Second*5, pl.Conn, b)
+	}
+	return
+}
+func writeTimeout(timeout time.Duration, c *websocket.Conn, msg []byte) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	return c.Write(ctx, websocket.MessageText, msg)
 }

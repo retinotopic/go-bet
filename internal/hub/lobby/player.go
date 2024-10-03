@@ -3,6 +3,7 @@ package lobby
 import (
 	"github.com/chehsunliu/poker"
 	"github.com/coder/websocket"
+	"github.com/goccy/go-json"
 )
 
 type GameBoard struct {
@@ -21,7 +22,7 @@ type PlayersRing struct {
 	Blindlvl int
 }
 
-// blind is calculated via: initial player stack * stackShare[ i ]
+// small blind is calculated via: initial player stack * stackShare[i]
 var stackShare = []float32{
 	0.01,
 	0.02,
@@ -47,6 +48,7 @@ func (rs *PlayersRing) NextDealer(start, offset int) int {
 }
 
 type PlayUnit struct {
+	Cards    []poker.Card    `json:"Cards"`
 	IsFold   bool            `json:"IsFold"`
 	IsAway   bool            `json:"IsAway"`
 	HasActed bool            `json:"HasActed"`
@@ -55,7 +57,46 @@ type PlayUnit struct {
 	Place    int             `json:"Place"`
 	TimeTurn int64           `json:"TimeTurn"` // turn time in seconds
 	Conn     *websocket.Conn `json:"-"`
-	Cards    []poker.Card    `json:"Cards"`
 	Name     string          `json:"Name"`
 	User_id  string          `json:"UserId"`
+}
+
+func (pu *PlayUnit) UnmarshalJSON(data []byte) error {
+	type Alias PlayUnit
+	aux := &struct {
+		Cards []json.RawMessage `json:"Cards"`
+		*Alias
+	}{
+		Alias: (*Alias)(pu),
+	}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	pu.Cards = make([]poker.Card, len(aux.Cards))
+	for i, rawCard := range aux.Cards {
+		if err := json.Unmarshal(rawCard, &pu.Cards[i]); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (pu *PlayUnit) MarshalJSON() ([]byte, error) {
+	type Alias PlayUnit
+	return json.Marshal(&struct {
+		Cards []string `json:"Cards"`
+		*Alias
+	}{
+		Cards: func() []string {
+			cards := make([]string, len(pu.Cards))
+			for i, card := range pu.Cards {
+				cards[i] = card.String()
+			}
+			return cards
+		}(),
+		Alias: (*Alias)(pu),
+	})
 }
