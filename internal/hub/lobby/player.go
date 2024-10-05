@@ -42,7 +42,7 @@ func (rs *PlayersRing) NextDealer(start, offset int) int {
 }
 
 type PlayUnit struct {
-	Cards    []poker.Card    `json:"Cards"`
+	Cards    []string        `json:"Cards"`
 	IsFold   bool            `json:"IsFold"`
 	IsAway   bool            `json:"IsAway"`
 	HasActed bool            `json:"HasActed"`
@@ -55,6 +55,7 @@ type PlayUnit struct {
 	Conn     *websocket.Conn `json:"-"`
 	mtx      sync.RWMutex    `json:"-"`
 	cache    []byte          `json:"-"`
+	cards    []poker.Card    `json:"-"`
 }
 
 func (p *PlayUnit) GetCache() []byte {
@@ -79,9 +80,10 @@ type GameBoard struct {
 	DealerPlace int          `json:"DealerPlace"`
 	Deadline    int64        `json:"Deadline"`
 	Blind       int          `json:"Blind"`
-	Cards       []poker.Card `json:"Cards"`
+	Cards       []string     `json:"Cards"`
 	mtx         sync.RWMutex `json:"-"`
 	cache       []byte       `json:"-"`
+	cards       []poker.Card `json:"-"`
 }
 
 func (g *GameBoard) GetCache() []byte {

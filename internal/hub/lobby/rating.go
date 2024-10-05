@@ -26,15 +26,17 @@ func (r *RatingImpl) Validate(ctrl Ctrl) {
 func (r *RatingImpl) PlayerOut(plr []PlayUnit, place int) {
 	baseChange := 30
 	middlePlace := float64(len(r.Players)+1) / 2
-	for _, plr := range plr {
+	for i := range plr {
 		rating := int(math.Round(float64(baseChange) * (middlePlace - float64(place)) / (middlePlace - 1)))
-		userid, err := strconv.Atoi(plr.User_id)
+		userid, err := strconv.Atoi(plr[i].User_id)
 		data, err := r.q.NewMessage(userid, rating)
 		if err != nil {
 			r.q.PublishTask(data, 5)
 		}
-		plr.Conn.WriteJSON(plr)
-		plr.Conn.Close()
+
+		writeTimeout(time.Second*5, plr[i].Conn, []byte(`{"GameOverPlace":"`+strconv.Itoa(place)+`"}`))
+		plr[i].Conn.CloseNow()
+		r.MapTable.Delete(plr[i].User_id)
 	}
 	if place == 1 {
 		for range 3 {

@@ -64,21 +64,15 @@ func (c *Lobby) HandleConn(plr *PlayUnit) {
 		c.MapTable.DeleteIf(plr.User_id, func(value *PlayUnit) bool { return value.Place == -1 }) //if the seat is unoccupied, delete from map
 		plr.Conn.CloseNow()
 	}()
-	byteplr, err := json.Marshal(plr)
-	if err != nil {
-		return
-	}
-	bytebrd, err := json.Marshal(c.Board)
-	if err != nil {
-		return
-	}
-	go writeTimeout(time.Second*5, plr.Conn, bytebrd)
-	go writeTimeout(time.Second*5, plr.Conn, byteplr)
 
+	go writeTimeout(time.Second*5, plr.Conn, c.Board.GetCache())
+	isEmpty := true
 	for _, v := range c.Players { // load current state of the game
-		if v != plr {
-			writeTimeout(time.Second*5, plr.Conn, EmptyCards(v.GetCache()))
+		if v == plr {
+			isEmpty = false
 		}
+		writeTimeout(time.Second*5, plr.Conn, EmptyCards(v.GetCache(), isEmpty))
+		isEmpty = true
 	}
 	for { // listening for actions
 		ctrl := Ctrl{}
@@ -93,31 +87,20 @@ func (c *Lobby) HandleConn(plr *PlayUnit) {
 		ctrl.Plr = plr
 		plr.IsAway = false
 		c.PlayerCh <- ctrl
+		time.Sleep(time.Millisecond * 500)
 	}
 }
-func (l *Lobby) BroadcastPlayer(plr PlayUnit, isExposed bool) (err error) {
-	b, err := json.Marshal(plr)
-	if err != nil {
-		return err
-	}
-	go writeTimeout(time.Second*5, plr.Conn, b)
-	if !isExposed {
-		EmptyCards(b)
-	}
-	l.m.Range(func(key string, val *PlayUnit) (stop bool) { // spectators
-		go writeTimeout(time.Second*5, val.Conn, b)
+func (l *Lobby) BroadcastPlayer(plr *PlayUnit, isExposed bool) (err error) {
+	l.MapTable.Range(func(key string, val *PlayUnit) (stop bool) {
+		go writeTimeout(time.Second*5, val.Conn, EmptyCards(plr.GetCache(), isExposed))
 		return
 	})
 	return
 }
 
 func (l *Lobby) BroadcastBoard(board *GameBoard) (err error) {
-	b, err := json.Marshal(board)
-	if err != nil {
-		return err
-	}
-	l.m.Range(func(key string, val *PlayUnit) (stop bool) { // spectators
-		go writeTimeout(time.Second*5, val.Conn, b)
+	l.MapTable.Range(func(key string, val *PlayUnit) (stop bool) { // spectators
+		go writeTimeout(time.Second*5, val.Conn, board.GetCache())
 		return
 	})
 
@@ -129,7 +112,10 @@ func writeTimeout(timeout time.Duration, c *websocket.Conn, msg []byte) error {
 
 	return c.Write(ctx, websocket.MessageText, msg)
 }
-func EmptyCards(data []byte) (data2 []byte) { // in order to not marshaling twice, but for the cards to be empty
+func EmptyCards(data []byte, isEmpty bool) (data2 []byte) { // in order to not marshaling twice, but for the cards to be empty
+	if !isEmpty {
+		return data
+	}
 	start := bytes.IndexByte(data, '[')
 	if start == -1 {
 		return data
