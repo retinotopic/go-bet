@@ -1,19 +1,12 @@
 package lobby
 
 import (
+	"sync"
+
+	json "github.com/bytedance/sonic"
 	"github.com/chehsunliu/poker"
 	"github.com/coder/websocket"
-	"github.com/goccy/go-json"
 )
-
-type GameBoard struct {
-	Bank        int          `json:"Bank"`
-	TurnPlace   int          `json:"TurnPlace"`
-	DealerPlace int          `json:"DealerPlace"`
-	Deadline    int64        `json:"Deadline"`
-	Blind       int          `json:"Blind"`
-	Cards       []poker.Card `json:"Cards"`
-}
 
 type PlayersRing struct {
 	Players  []*PlayUnit
@@ -31,6 +24,7 @@ var stackShare = []float32{
 	0.075,
 	0.1,
 	0.15,
+	0.20,
 	0.25,
 	0.3}
 
@@ -56,47 +50,52 @@ type PlayUnit struct {
 	Bet      int             `json:"Bet"`
 	Place    int             `json:"Place"`
 	TimeTurn int64           `json:"TimeTurn"` // turn time in seconds
-	Conn     *websocket.Conn `json:"-"`
 	Name     string          `json:"Name"`
 	User_id  string          `json:"UserId"`
+	Conn     *websocket.Conn `json:"-"`
+	mtx      sync.RWMutex    `json:"-"`
+	cache    []byte          `json:"-"`
 }
 
-func (pu *PlayUnit) UnmarshalJSON(data []byte) error {
-	type Alias PlayUnit
-	aux := &struct {
-		Cards []json.RawMessage `json:"Cards"`
-		*Alias
-	}{
-		Alias: (*Alias)(pu),
+func (p *PlayUnit) GetCache() []byte {
+	p.mtx.RLock()
+	defer p.mtx.RUnlock()
+	return p.cache
+}
+func (p *PlayUnit) StoreCache() []byte {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+	var err error
+	p.cache, err = json.Marshal(p)
+	if err != nil {
+		panic("somehow bytedance/sonic messed up badly...")
 	}
-
-	if err := json.Unmarshal(data, &aux); err != nil {
-		return err
-	}
-
-	pu.Cards = make([]poker.Card, len(aux.Cards))
-	for i, rawCard := range aux.Cards {
-		if err := json.Unmarshal(rawCard, &pu.Cards[i]); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return p.cache
 }
 
-func (pu *PlayUnit) MarshalJSON() ([]byte, error) {
-	type Alias PlayUnit
-	return json.Marshal(&struct {
-		Cards []string `json:"Cards"`
-		*Alias
-	}{
-		Cards: func() []string {
-			cards := make([]string, len(pu.Cards))
-			for i, card := range pu.Cards {
-				cards[i] = card.String()
-			}
-			return cards
-		}(),
-		Alias: (*Alias)(pu),
-	})
+type GameBoard struct {
+	Bank        int          `json:"Bank"`
+	TurnPlace   int          `json:"TurnPlace"`
+	DealerPlace int          `json:"DealerPlace"`
+	Deadline    int64        `json:"Deadline"`
+	Blind       int          `json:"Blind"`
+	Cards       []poker.Card `json:"Cards"`
+	mtx         sync.RWMutex `json:"-"`
+	cache       []byte       `json:"-"`
+}
+
+func (g *GameBoard) GetCache() []byte {
+	g.mtx.RLock()
+	defer g.mtx.RUnlock()
+	return g.cache
+}
+func (g *GameBoard) StoreCache() []byte {
+	g.mtx.Lock()
+	defer g.mtx.Unlock()
+	var err error
+	g.cache, err = json.Marshal(g)
+	if err != nil {
+		panic("somehow bytedance/sonic messed up badly...")
+	}
+	return g.cache
 }

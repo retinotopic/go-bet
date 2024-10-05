@@ -5,9 +5,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/chehsunliu/poker"
+	json "github.com/bytedance/sonic"
 	"github.com/coder/websocket"
-	"github.com/goccy/go-json"
 	csmap "github.com/mhmtszr/concurrent-swiss-map"
 )
 
@@ -19,17 +18,16 @@ const (
 )
 
 type Ctrl struct { //control union
-	IsExposed bool       `json:"-"` // means whether the cards should be shown to everyone
-	Place     int        `json:"Place"`
-	CtrlBet   int        `json:"CtrlBet"`
-	Message   string     `json:"Message"`
-	Plr       *PlayUnit  `json:"-"`
-	Brd       *GameBoard `json:"GameBoard"`
+	IsExposed bool      `json:"-"` // means whether the cards should be shown to everyone
+	Place     int       `json:"Place"`
+	CtrlBet   int       `json:"CtrlBet"`
+	Message   string    `json:"Message"`
+	Plr       *PlayUnit `json:"-"`
 }
 
 type Lobby struct {
 	PlayersRing
-	m            *csmap.CsMap[string, *PlayUnit] // id to place mapping
+	MapTable     *csmap.CsMap[string, *PlayUnit] // id to place mapping
 	HasBegun     bool
 	PlayerCh     chan Ctrl
 	checkTimeout *time.Ticker
@@ -61,32 +59,26 @@ func (l *Lobby) LobbyStart() {
 	}
 }
 
-func (l *Lobby) PlayerIter(yield func(*PlayUnit) bool) {
-	for _, pl := range l.Players { /// players
-		yield(pl)
-	}
-	l.m.Range(func(key string, val *PlayUnit) (stop bool) { // spectators
-		yield(val)
-		return
-	})
-}
-
 func (c *Lobby) HandleConn(plr *PlayUnit) {
-	c.m.SetIfAbsent(plr.User_id, plr)
-
 	defer func() {
-		c.m.DeleteIf(plr.User_id, func(value *PlayUnit) bool { return value.Place == -2 }) //if the seat is unoccupied, delete from map
+		c.MapTable.DeleteIf(plr.User_id, func(value *PlayUnit) bool { return value.Place == -1 }) //if the seat is unoccupied, delete from map
 		plr.Conn.CloseNow()
 	}()
-	plr.Conn.WriteJSON(plr)
-	plr.Conn.WriteJSON(c.Board)
-	for _, v := range c.Players { // load current state of the game
-		pb := *v
-		if v != plr {
-			pb.Cards = []poker.Card{}
-			plr.Conn.WriteJSON(pb)
-		}
+	byteplr, err := json.Marshal(plr)
+	if err != nil {
+		return
+	}
+	bytebrd, err := json.Marshal(c.Board)
+	if err != nil {
+		return
+	}
+	go writeTimeout(time.Second*5, plr.Conn, bytebrd)
+	go writeTimeout(time.Second*5, plr.Conn, byteplr)
 
+	for _, v := range c.Players { // load current state of the game
+		if v != plr {
+			writeTimeout(time.Second*5, plr.Conn, EmptyCards(v.GetCache()))
+		}
 	}
 	for { // listening for actions
 		ctrl := Ctrl{}
@@ -103,29 +95,32 @@ func (c *Lobby) HandleConn(plr *PlayUnit) {
 		c.PlayerCh <- ctrl
 	}
 }
-func (c *Lobby) BroadcastPlayer(plr PlayUnit, isExposed bool) (err error) {
+func (l *Lobby) BroadcastPlayer(plr PlayUnit, isExposed bool) (err error) {
 	b, err := json.Marshal(plr)
 	if err != nil {
 		return err
 	}
 	go writeTimeout(time.Second*5, plr.Conn, b)
 	if !isExposed {
-		plr.Cards = []poker.Card{}
+		EmptyCards(b)
 	}
-	for pl := range c.PlayerIter {
-		go writeTimeout(time.Second*5, pl.Conn, b)
-	}
+	l.m.Range(func(key string, val *PlayUnit) (stop bool) { // spectators
+		go writeTimeout(time.Second*5, val.Conn, b)
+		return
+	})
 	return
 }
 
-func (c *Lobby) BroadcastBoard(board *GameBoard) (err error) {
+func (l *Lobby) BroadcastBoard(board *GameBoard) (err error) {
 	b, err := json.Marshal(board)
 	if err != nil {
 		return err
 	}
-	for pl := range c.PlayerIter {
-		go writeTimeout(time.Second*5, pl.Conn, b)
-	}
+	l.m.Range(func(key string, val *PlayUnit) (stop bool) { // spectators
+		go writeTimeout(time.Second*5, val.Conn, b)
+		return
+	})
+
 	return
 }
 func writeTimeout(timeout time.Duration, c *websocket.Conn, msg []byte) error {
@@ -134,18 +129,19 @@ func writeTimeout(timeout time.Duration, c *websocket.Conn, msg []byte) error {
 
 	return c.Write(ctx, websocket.MessageText, msg)
 }
-func EmptyCards(data []byte) (ok bool) { // in order to not marshaling twice, but for the cards to be empty
+func EmptyCards(data []byte) (data2 []byte) { // in order to not marshaling twice, but for the cards to be empty
 	start := bytes.IndexByte(data, '[')
 	if start == -1 {
-		return false
+		return data
 	}
 	start++
 	end := bytes.IndexByte(data, ']')
 	if end == -1 {
-		return false
+		return data
 	}
 	for i := start; i < end; i++ {
 		data[i] = ' '
 	}
-	return true
+	copy(data, data2)
+	return data2
 }

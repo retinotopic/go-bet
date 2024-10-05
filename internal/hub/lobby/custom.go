@@ -20,7 +20,7 @@ func (c *CustomImpl) Validate(ctrl Ctrl) {
 			c.HasBegun = true
 			i := 0
 			//at game start add occupied seats at the table to players
-			c.m.Range(func(key string, val *PlayUnit) (stop bool) {
+			c.MapTable.Range(func(key string, val *PlayUnit) (stop bool) {
 				if val.Place >= 0 {
 					c.Players[i] = val
 					i++

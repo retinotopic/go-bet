@@ -39,17 +39,27 @@ func (h *HubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
-
 	lb, ok := h.lobby.Load(wsurl)
+
 	if ok {
+		var plr *lobby.PlayUnit
+		lb.MapTable.SetIf(user_id, func(previousVale *lobby.PlayUnit, previousFound bool) (value *lobby.PlayUnit, set bool) {
+			val, ok := lb.MapTable.Load(user_id)
+			if ok {
+				plr = val
+			} else {
+				plr = &lobby.PlayUnit{User_id: user_id, Name: name}
+			}
+			return plr, !ok
+		})
 		conn, err := websocket.Accept(w, r, nil)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		go lb.HandleConn(&lobby.PlayUnit{User_id: user_id, Name: name, Conn: conn})
+		plr.Conn = conn
+		go lb.HandleConn(plr)
 	}
-
 }
 func isNumeric(s string) bool {
 	for _, char := range s {
