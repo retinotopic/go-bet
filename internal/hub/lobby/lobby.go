@@ -3,11 +3,11 @@ package lobby
 import (
 	"bytes"
 	"context"
+	"sync"
 	"time"
 
 	json "github.com/bytedance/sonic"
 	"github.com/coder/websocket"
-	csmap "github.com/mhmtszr/concurrent-swiss-map"
 )
 
 const (
@@ -16,6 +16,11 @@ const (
 	river
 	postriver
 )
+
+type AllUsers struct {
+	M   map[string]*PlayUnit // id to user/player
+	Mtx sync.RWMutex
+}
 
 type Ctrl struct { //control union
 	IsExposed bool      `json:"-"` // means whether the cards should be shown to everyone
@@ -27,7 +32,7 @@ type Ctrl struct { //control union
 
 type Lobby struct {
 	PlayersRing
-	MapTable     *csmap.CsMap[string, *PlayUnit] // id to place mapping
+	MapUsers     AllUsers
 	HasBegun     bool
 	PlayerCh     chan Ctrl
 	checkTimeout *time.Ticker
@@ -61,17 +66,21 @@ func (l *Lobby) LobbyStart() {
 
 func (c *Lobby) HandleConn(plr *PlayUnit) {
 	defer func() {
-		c.MapTable.DeleteIf(plr.User_id, func(value *PlayUnit) bool { return value.Place == -1 }) //if the seat is unoccupied, delete from map
+		defer c.MapUsers.Mtx.Unlock()
+		c.MapUsers.Mtx.Lock()
+		if plr.Place == -1 {
+			delete(c.MapUsers.M, plr.User_id)
+		}
 		plr.Conn.CloseNow()
 	}()
 
-	go writeTimeout(time.Second*5, plr.Conn, c.Board.GetCache())
+	go WriteTimeout(time.Second*5, plr.Conn, c.Board.GetCache())
 	isEmpty := true
 	for _, v := range c.Players { // load current state of the game
 		if v == plr {
 			isEmpty = false
 		}
-		writeTimeout(time.Second*5, plr.Conn, EmptyCards(v.GetCache(), isEmpty))
+		WriteTimeout(time.Second*5, plr.Conn, EmptyCards(v.GetCache(), isEmpty))
 		isEmpty = true
 	}
 	for { // listening for actions
@@ -91,22 +100,23 @@ func (c *Lobby) HandleConn(plr *PlayUnit) {
 	}
 }
 func (l *Lobby) BroadcastPlayer(plr *PlayUnit, isExposed bool) (err error) {
-	l.MapTable.Range(func(key string, val *PlayUnit) (stop bool) {
-		go writeTimeout(time.Second*5, val.Conn, EmptyCards(plr.GetCache(), isExposed))
-		return
-	})
+	defer l.MapUsers.Mtx.RUnlock()
+	l.MapUsers.Mtx.RLock()
+	for _, val := range l.MapUsers.M {
+		go WriteTimeout(time.Second*5, val.Conn, EmptyCards(plr.GetCache(), isExposed))
+	}
 	return
 }
 
 func (l *Lobby) BroadcastBoard(board *GameBoard) (err error) {
-	l.MapTable.Range(func(key string, val *PlayUnit) (stop bool) { // spectators
-		go writeTimeout(time.Second*5, val.Conn, board.GetCache())
-		return
-	})
-
+	defer l.MapUsers.Mtx.RUnlock()
+	l.MapUsers.Mtx.RLock()
+	for _, val := range l.MapUsers.M {
+		go WriteTimeout(time.Second*5, val.Conn, board.GetCache())
+	}
 	return
 }
-func writeTimeout(timeout time.Duration, c *websocket.Conn, msg []byte) error {
+func WriteTimeout(timeout time.Duration, c *websocket.Conn, msg []byte) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 

@@ -19,6 +19,7 @@ type Implementor interface {
 }
 type Game struct {
 	*Lobby
+	CardsBuffer []string
 	Deck        *poker.Deck
 	MaxBet      int         //
 	TurnTimer   *time.Timer //
@@ -36,7 +37,7 @@ func (g *Game) tillTurnOrBlind() {
 			g.Players[idx].IsAway = true
 			g.PlayerCh <- Ctrl{Plr: g.Players[idx]}
 		case <-g.BlindTimer.C:
-			g.Board.CurrentBlind *= 2
+			g.Board.Blind *= 2
 			g.BlindTimer.Reset(time.Minute * 5)
 		case <-g.stop:
 			return
@@ -50,6 +51,9 @@ func (g *Game) Game() {
 		case <-g.StartGameCh:
 			var stages int
 			g.Board.DealerPlace = 0
+			g.CardsBuffer = make([]string, 5)
+			g.Board.cards = make([]poker.Card, 7)
+			g.Board.Cards = make([]string, 0, 5)
 			g.stop = make(chan bool, 1)
 			randsrc := rand.NewSource(int64(new(maphash.Hash).Sum64()))
 			rand.New(randsrc).Shuffle(len(g.PlayersRing.Players), func(i, j int) { // shuffle player seats
@@ -92,7 +96,8 @@ func (g *Game) Game() {
 							pl.TimeTurn = 10
 						}
 						pl.HasActed = true
-						g.BroadcastCh <- Ctrl{Plr: pl}
+						pl.StoreCache()
+						g.BroadcastPlayer(pl, false)
 
 						pl = g.PlayersRing.Next(1)
 
@@ -100,10 +105,10 @@ func (g *Game) Game() {
 							switch stages {
 							case flop: // preflop to flop
 								flopcard := g.Deck.Draw(3)
-								g.Board.Cards = append(g.Board.Cards, flopcard...)
+								g.Board.Cards = append(g.Board.Cards, g.CardsBuffer[0:4]...)
 							case turn, river: // flop to turn, turn to river
 								flopcard := g.Deck.Draw(1)
-								g.Board.Cards = append(g.Board.Cards, flopcard[0])
+								g.Board.cards = append(g.Board.Cards, flopcard[0])
 							case postriver: //postriver evaluation
 								if ok := g.PostRiver(); ok {
 									GAME_LOOP = false
@@ -159,19 +164,25 @@ func (g *Game) PostRiver() (gameOver bool) {
 func (g *Game) DealNewHand() {
 	g.Deck = poker.NewDeck()
 	g.Deck.Shuffle()
-
+	g.CardsBuffer = g.CardsBuffer[:0]
+	g.Board.cards = g.Board.cards[:0]
+	g.Board.Cards = g.Board.Cards[:0]
 	for i, v := range g.Players {
-		v.Cards = g.Deck.Draw(2)
+		v.cards = g.Deck.Draw(2)
 		v.Place = i
 		v.IsFold = false
 		v.HasActed = false
 	}
-	g.Board.Cards = make([]poker.Card, 0, 7)
+	c := g.Deck.Draw(5)
+	for i := range c {
+		g.CardsBuffer = append(g.CardsBuffer, c[i].String())
+	}
+	g.Board.cards = make([]poker.Card, 0, 7)
 
 	g.Board.DealerPlace = g.PlayersRing.NextDealer(g.Board.DealerPlace, 1)
 
-	g.PlayersRing.Next(1).Bet = g.Board.CurrentBlind
-	g.PlayersRing.Next(1).Bet = g.Board.CurrentBlind * 2
+	g.PlayersRing.Next(1).Bet = g.Board.Blind
+	g.PlayersRing.Next(1).Bet = g.Board.Blind * 2
 
 	pl := g.PlayersRing.Next(1)
 

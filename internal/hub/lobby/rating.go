@@ -34,9 +34,12 @@ func (r *RatingImpl) PlayerOut(plr []PlayUnit, place int) {
 			r.q.PublishTask(data, 5)
 		}
 
-		writeTimeout(time.Second*5, plr[i].Conn, []byte(`{"GameOverPlace":"`+strconv.Itoa(place)+`"}`))
+		r.MapUsers.Mtx.Lock()
+		delete(r.MapUsers.M, plr[i].User_id)
+		r.MapUsers.Mtx.Unlock()
+
+		WriteTimeout(time.Second*5, plr[i].Conn, []byte(`{"GameOverPlace":"`+strconv.Itoa(place)+`"}`))
 		plr[i].Conn.CloseNow()
-		r.MapTable.Delete(plr[i].User_id)
 	}
 	if place == 1 {
 		for range 3 {
