@@ -3,8 +3,8 @@ package lobby
 import (
 	"sync"
 
+	"github.com/Nerdmaster/poker"
 	json "github.com/bytedance/sonic"
-	"github.com/chehsunliu/poker"
 	"github.com/coder/websocket"
 )
 
@@ -69,7 +69,7 @@ func (p *PlayUnit) StoreCache() []byte {
 	var err error
 	p.cache, err = json.Marshal(p)
 	if err != nil {
-		panic("somehow bytedance/sonic messed up badly...")
+		panic("somehow bytedance messed up badly...")
 	}
 	return p.cache
 }

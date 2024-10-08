@@ -6,7 +6,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/chehsunliu/poker"
+	"github.com/Nerdmaster/poker"
 )
 
 type top struct {
@@ -50,10 +50,15 @@ func (g *Game) Game() {
 		select {
 		case <-g.StartGameCh:
 			var stages int
+			for _, v := range g.Players { // give the player his initial bank
+				v.Bank = g.Board.Bank
+			}
 			g.Board.DealerPlace = 0
+
 			g.CardsBuffer = make([]string, 5)
 			g.Board.cards = make([]poker.Card, 7)
 			g.Board.Cards = make([]string, 0, 5)
+
 			g.stop = make(chan bool, 1)
 			randsrc := rand.NewSource(int64(new(maphash.Hash).Sum64()))
 			rand.New(randsrc).Shuffle(len(g.PlayersRing.Players), func(i, j int) { // shuffle player seats
@@ -162,18 +167,19 @@ func (g *Game) PostRiver() (gameOver bool) {
 }
 
 func (g *Game) DealNewHand() {
-	g.Deck = poker.NewDeck()
+	h := poker.NewDeck()
+	h.Evaluate()
 	g.Deck.Shuffle()
-	g.CardsBuffer = g.CardsBuffer[:0]
-	g.Board.cards = g.Board.cards[:0]
-	g.Board.Cards = g.Board.Cards[:0]
+	g.CardsBuffer = g.CardsBuffer[:0] // cards that haven't come to the table yet (also string)
+	g.Board.cards = g.Board.cards[:0] // current cards on table for evaluating hand
+	g.Board.Cards = g.Board.Cards[:0] // current cards on table for json sending
 	for i, v := range g.Players {
-		v.cards = g.Deck.Draw(2)
+		v.cards = poker.NewHand()
 		v.Place = i
 		v.IsFold = false
 		v.HasActed = false
 	}
-	c := g.Deck.Draw(5)
+	c := g.Deck.Draw(7)
 	for i := range c {
 		g.CardsBuffer = append(g.CardsBuffer, c[i].String())
 	}
@@ -203,6 +209,7 @@ func (g *Game) CalcWinners() {
 			g.Board.Cards[5] = v.Cards[0]
 			g.Board.Cards[6] = v.Cards[1]
 			eval := poker.Evaluate(g.Board.Cards)
+			poker.RankString()
 			topPlaces = append(topPlaces, top{rating: eval, place: i})
 		}
 		v.IsFold = false
