@@ -43,12 +43,17 @@ func (h *HubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 
 	if ok {
 		var plr *lobby.PlayUnit
-		lb.MapTable.SetIf(user_id, func(previousVale *lobby.PlayUnit, previousFound bool) (value *lobby.PlayUnit, set bool) {
-			if !previousFound {
-				previousVale = &lobby.PlayUnit{User_id: user_id, Name: name}
-			}
-			return previousVale, !previousFound
-		})
+
+		lb.MapUsers.Mtx.Lock()
+		pl, ok := lb.MapUsers.M[user_id]
+		if ok {
+			plr = pl
+		} else {
+			plr = &lobby.PlayUnit{User_id: user_id, Name: name}
+			lb.MapUsers.M[user_id] = plr
+		}
+		lb.MapUsers.Mtx.Unlock()
+
 		conn, err := websocket.Accept(w, r, nil)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)

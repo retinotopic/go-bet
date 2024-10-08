@@ -75,15 +75,16 @@ func (p *PlayUnit) StoreCache() []byte {
 }
 
 type GameBoard struct {
+	Cards       []string     `json:"Cards"`
 	Bank        int          `json:"Bank"`
 	TurnPlace   int          `json:"TurnPlace"`
 	DealerPlace int          `json:"DealerPlace"`
 	Deadline    int64        `json:"Deadline"`
 	Blind       int          `json:"Blind"`
-	Cards       []string     `json:"Cards"`
 	mtx         sync.RWMutex `json:"-"`
 	cache       []byte       `json:"-"`
 	cards       []poker.Card `json:"-"`
+	HiddenCards []string     `json:"-"`
 }
 
 func (g *GameBoard) GetCache() []byte {

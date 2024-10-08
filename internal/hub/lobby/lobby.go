@@ -8,6 +8,7 @@ import (
 
 	json "github.com/bytedance/sonic"
 	"github.com/coder/websocket"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -73,16 +74,25 @@ func (c *Lobby) HandleConn(plr *PlayUnit) {
 		}
 		plr.Conn.CloseNow()
 	}()
-
-	go WriteTimeout(time.Second*5, plr.Conn, c.Board.GetCache())
+	g := errgroup.Group{}
+	g.Go(func() error {
+		return WriteTimeout(time.Second*5, plr.Conn, c.Board.GetCache())
+	})
 	isEmpty := true
 	for _, v := range c.Players { // load current state of the game
 		if v == plr {
 			isEmpty = false
 		}
-		WriteTimeout(time.Second*5, plr.Conn, EmptyCards(v.GetCache(), isEmpty))
+		g.Go(func() error {
+			return WriteTimeout(time.Second*5, plr.Conn, EmptyCards(v.GetCache(), isEmpty))
+		})
 		isEmpty = true
 	}
+	if err := g.Wait(); err != nil {
+		return
+	}
+	ctrl := Ctrl{}
+	ctrl.Plr = plr
 	for { // listening for actions
 		ctrl := Ctrl{}
 		_, data, err := plr.Conn.Read(context.TODO())
@@ -93,7 +103,6 @@ func (c *Lobby) HandleConn(plr *PlayUnit) {
 		if err != nil {
 			break
 		}
-		ctrl.Plr = plr
 		plr.IsAway = false
 		c.PlayerCh <- ctrl
 		time.Sleep(time.Millisecond * 500)
