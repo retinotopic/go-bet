@@ -36,22 +36,20 @@ func (rs *PlayersRing) NextDealer(start, offset int) int {
 }
 
 type PlayUnit struct {
-	Cards        []string        `json:"Cards"`
-	IsFold       bool            `json:"IsFold"`
-	IsAway       bool            `json:"IsAway"`
-	IsEliminated bool            `json:"IsEliminated"`
-	HasActed     bool            `json:"HasActed"`
-	Bank         int             `json:"Bank"`
-	Bet          int             `json:"Bet"`
-	Place        int             `json:"Place"`
-	TimeTurn     int64           `json:"TimeTurn"` // turn time in seconds
-	Name         string          `json:"Name"`
-	User_id      string          `json:"UserId"`
-	RingId       int             `json:"-"`
-	Conn         *websocket.Conn `json:"-"`
-	mtx          sync.RWMutex    `json:"-"`
-	cache        []byte          `json:"-"`
-	cards        poker.CardList  `json:"-"`
+	Cards    []string        `json:"Cards"`
+	IsFold   bool            `json:"IsFold"`
+	IsAway   bool            `json:"IsAway"`
+	HasActed bool            `json:"HasActed"`
+	Bank     int             `json:"Bank"`
+	Bet      int             `json:"Bet"`
+	Place    int             `json:"Place"`
+	TimeTurn int64           `json:"TimeTurn"` // turn time in seconds
+	Name     string          `json:"Name"`
+	User_id  string          `json:"UserId"`
+	Conn     *websocket.Conn `json:"-"`
+	mtx      sync.RWMutex    `json:"-"`
+	cache    []byte          `json:"-"`
+	cards    poker.CardList  `json:"-"`
 }
 
 func (p *PlayUnit) GetCache() []byte {

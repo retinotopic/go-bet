@@ -17,7 +17,7 @@ type Queue interface {
 }
 
 func (r *RatingImpl) Validate(ctrl Ctrl) {
-	timer := time.NewTimer(time.Second * 45)
+	timer := time.NewTimer(time.Second * time.Duration(ctrl.CtrlInt))
 	for range timer.C {
 		r.StartGameCh <- true
 		return
@@ -37,7 +37,7 @@ func (r *RatingImpl) PlayerOut(plr []PlayUnit, place int) {
 		if err != nil {
 			return
 		}
-		r.q.PublishTask(data, 5)
+		err = r.q.PublishTask(data, 5)
 		if err != nil {
 			return
 		}

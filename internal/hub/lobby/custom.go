@@ -4,6 +4,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	json "github.com/bytedance/sonic"
 )
 
 type CustomImpl struct {
@@ -17,11 +19,11 @@ func (c *CustomImpl) Validate(ctrl Ctrl) {
 		c.Admin = ctrl.Plr
 	})
 	if c.Admin == ctrl.Plr {
-		//admin started the game, and also place 0 represents the table of cards itself
+		//admin started the game, and also place -1 represents the table of cards itself
 		if ctrl.Place == -1 {
 			c.HasBegun = true
-			c.Board.Bank = ctrl.CtrlBet
-			sec, err := strconv.ParseInt(ctrl.Message, 10, 0)
+			c.Board.Bank = ctrl.CtrlInt
+			sec, err := strconv.ParseInt(ctrl.CtrlString, 10, 0)
 			if err != nil {
 				return
 			}
@@ -43,20 +45,24 @@ func (c *CustomImpl) Validate(ctrl Ctrl) {
 			c.StartGameCh <- true
 		} else { // admin approves player seat
 			c.AllUsers.Mtx.RLock()
-			c.AllUsers.M[ctrl.Plr.User_id]
+			pl, ok := c.AllUsers.M[ctrl.CtrlString]
+
 			c.AllUsers.Mtx.RUnlock()
-			if ok {
+			// is user exist && if place index isnt out of range && if place is not occupied
+			if ok && ctrl.Place >= 0 && ctrl.Place <= 7 && !c.Seats[ctrl.Place].isOccupied {
+				c.Seats[ctrl.Place].isOccupied = true
 				pl.Place = ctrl.Place
 				pl.cache = pl.StoreCache()
 				c.BroadcastPlayer(ctrl.Plr, true)
 			}
 		}
 	} else if ctrl.Place >= 0 && ctrl.Place <= 7 {
-		c.AllUsers.Mtx.RLock()
-		if !c.Seats[ctrl.Plr.Place] {
-			WriteTimeout(time.Second*5, c.Admin.Conn, ctrl.Plr.StoreCache())
+		//player's request to be at the table
+		b, err := json.Marshal(ctrl)
+		if err != nil {
+			return
 		}
-		c.AllUsers.Mtx.RUnlock()
+		WriteTimeout(time.Second*5, c.Admin.Conn, b)
 	} else if ctrl.Place == -2 && ctrl.Plr.Place >= 0 { // player leaves
 		c.AllUsers.Mtx.RLock()
 		pl, ok := c.AllUsers.M[ctrl.Plr.User_id]

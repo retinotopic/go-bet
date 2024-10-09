@@ -18,11 +18,11 @@ const (
 )
 
 type Ctrl struct { //control union
-	IsExposed bool      `json:"-"` // means whether the cards should be shown to everyone
-	Place     int       `json:"Place"`
-	CtrlBet   int       `json:"CtrlBet"`
-	Message   string    `json:"Message"`
-	Plr       *PlayUnit `json:"-"`
+	IsExposed  bool      `json:"-"` // means whether the cards should be shown to everyone
+	Place      int       `json:"Place"`
+	CtrlInt    int       `json:"CtrlInt"`
+	CtrlString string    `json:"CtrlString"`
+	Plr        *PlayUnit `json:"-"`
 }
 
 type Lobby struct {
