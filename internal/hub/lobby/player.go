@@ -19,7 +19,6 @@ type PlayersRing struct {
 	Idx      int
 	Board    GameBoard
 	Blindlvl int
-	itermtx  sync.RWMutex
 }
 
 func (rs *PlayersRing) Next(offset int) *PlayUnit {

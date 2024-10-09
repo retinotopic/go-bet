@@ -40,7 +40,7 @@ func (l *Lobby) LobbyStart() {
 	gm := &Game{Lobby: l}
 	go gm.Game()
 	l.checkTimeout = time.NewTicker(time.Minute * 3)
-	l.Shutdown = make(chan bool, 3)
+	l.Shutdown = make(chan bool, 10) // for safety reasons set buffer size 10
 	l.PlayerCh = make(chan Ctrl)
 	timeout := time.Minute * 4
 	for {
@@ -72,15 +72,19 @@ func (c *Lobby) HandleConn(plr *PlayUnit) {
 		return WriteTimeout(time.Second*5, plr.Conn, c.Board.GetCache())
 	})
 	isEmpty := true
-	for _, v := range c.Players { // load current state of the game
-		if v == plr {
-			isEmpty = false
+	c.AllUsers.Mtx.RLock()
+	for _, v := range c.AllUsers.M { // load current state of the game
+		if v.Place >= 0 {
+			if v == plr {
+				isEmpty = false
+			}
+			g.Go(func() error {
+				return WriteTimeout(time.Second*5, plr.Conn, EmptyCards(v.GetCache(), isEmpty))
+			})
+			isEmpty = true
 		}
-		g.Go(func() error {
-			return WriteTimeout(time.Second*5, plr.Conn, EmptyCards(v.GetCache(), isEmpty))
-		})
-		isEmpty = true
 	}
+	c.AllUsers.Mtx.RUnlock()
 	if err := g.Wait(); err != nil {
 		return
 	}

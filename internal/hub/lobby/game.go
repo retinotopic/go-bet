@@ -19,16 +19,19 @@ type Implementor interface {
 }
 type Seats struct {
 	place      uint8 // zero to seven
-	isOccupied bool
+	isOccupied bool  // seat occupied or not
 }
 type Game struct {
 	*Lobby
 	Seats       [8]Seats
+	topPlaces   []top
+	winners     []*PlayUnit
+	losers      []*PlayUnit
 	Deck        *Deck
-	pl          *PlayUnit   //current player
-	MaxBet      int         //
-	TurnTimer   *time.Timer //
-	BlindTimer  *time.Timer //
+	pl          *PlayUnit //current player
+	MaxBet      int
+	TurnTimer   *time.Timer
+	BlindTimer  *time.Timer
 	StartGameCh chan bool
 	stop        chan bool
 	BlindRaise  bool
@@ -38,10 +41,10 @@ type Game struct {
 func (g *Game) tillTurnOrBlind() {
 	for {
 		select {
-		case <-g.TurnTimer.C:
+		case <-g.TurnTimer.C: // player turn timer
 			g.pl.IsAway = true
 			g.PlayerCh <- Ctrl{Plr: g.pl}
-		case <-g.BlindTimer.C:
+		case <-g.BlindTimer.C: // timer for blind raise
 			g.BlindRaise = true
 		case <-g.stop:
 			return
@@ -57,7 +60,10 @@ func (g *Game) Game() {
 			var now int64
 			var dur time.Duration
 
-			g.Board.DealerPlace = 0
+			g.topPlaces = make([]top, 0, 8)     //---\
+			g.winners = make([]*PlayUnit, 0, 8) //	  >----- reusable memory for post-river calculations
+			g.losers = make([]*PlayUnit, 0, 8)  //---/
+
 			g.Board.Blind = g.Board.Bank * int(stackShare[g.Blindlvl]) // initial blind
 
 			g.Board.HiddenCards = make([]string, 5) // hidden cards that haven't come to the table yet (string)
@@ -65,14 +71,17 @@ func (g *Game) Game() {
 			g.Board.Cards = make([]string, 0, 5)    // current cards on table for json sending
 
 			g.stop = make(chan bool, 1)
-			randsrc := rand.NewSource(int64(new(maphash.Hash).Sum64()))
-			rand.New(randsrc).Shuffle(8, func(i, j int) { // shuffle player seats
-				g.Seats[i], g.Seats[j] = g.Seats[j], g.Seats[i]
-			})
-			for i, v := range g.Players { // give the player his starting stack
-				v.Bank = g.Board.Bank
-				v.Place = int(g.Seats[i].place)
+			if g.Seats != [8]Seats{} { // if the game is in ranked mode, shuffle seats for randomness
+				randsrc := rand.NewSource(int64(new(maphash.Hash).Sum64()))
+				rand.New(randsrc).Shuffle(8, func(i, j int) {
+					g.Seats[i], g.Seats[j] = g.Seats[j], g.Seats[i]
+				})
+				for i, v := range g.Players { // give the player his starting stack
+					v.Bank = g.Board.Bank
+					v.Place = int(g.Seats[i].place)
+				}
 			}
+
 			g.DealNewHand()
 			g.TurnTimer = time.NewTimer(time.Second * 10)
 			g.BlindTimer = time.NewTimer(time.Duration(g.Board.Deadline) * time.Minute)
@@ -166,23 +175,21 @@ func (g *Game) Game() {
 }
 func (g *Game) PostRiver() (gameOver bool) {
 	g.CalcWinners()
-	newPlayers := make([]*PlayUnit, 0, 8)
-	elims := make([]*PlayUnit, 0, 8)
+	g.winners = g.winners[:0]
+	g.losers = g.losers[:0]
 	for _, v := range g.Players {
 		if v.Bank > 0 {
-			newPlayers = append(newPlayers, v)
+			g.winners = append(g.winners, v)
 		} else {
-			elims = append(elims, v)
+			g.losers = append(g.losers, v)
 		}
 	}
-	g.Impl.PlayerOut(elims, len(g.Players))
-	g.itermtx.Lock()
-	g.Players = g.Players[:(len(newPlayers))]
-	copy(g.Players, newPlayers)
-	g.itermtx.Unlock()
-	g.Idx -= len(elims)
-	if len(newPlayers) == 1 {
-		g.Impl.PlayerOut(newPlayers, 1)
+	g.Impl.PlayerOut(g.losers, len(g.Players))
+	g.Players = g.Players[:(len(g.winners))]
+	copy(g.Players, g.winners)
+	g.Idx -= len(g.losers)
+	if len(g.winners) == 1 {
+		g.Impl.PlayerOut(g.winners, 1)
 		return true
 	}
 	g.DealNewHand()
@@ -222,8 +229,7 @@ func (g *Game) DealNewHand() {
 }
 
 func (g *Game) CalcWinners() {
-	topPlaces := make([]top, 0, 8)
-
+	g.topPlaces = g.topPlaces[:0]
 	for i, v := range g.Players {
 		if !v.IsFold && !v.IsAway {
 			g.Board.cards[0] = v.cards[0]
@@ -231,22 +237,25 @@ func (g *Game) CalcWinners() {
 
 			eval := g.Board.cards.Evaluate()
 			v.Cards[0] = poker.GetHandRank(eval).String()
-			topPlaces = append(topPlaces, top{rating: eval, place: i})
+			g.topPlaces = append(g.topPlaces, top{rating: eval, place: i})
 		}
 		v.IsFold = false
 	}
-	sort.Slice(topPlaces, func(i, j int) bool {
-		return topPlaces[i].rating < topPlaces[j].rating
+	sort.Slice(g.topPlaces, func(i, j int) bool {
+		return g.topPlaces[i].rating < g.topPlaces[j].rating
 	})
 	j := 0
-	for ; j == 0 || topPlaces[j].rating == topPlaces[j-1].rating; j++ {
+	for ; j == 0 || g.topPlaces[j].rating == g.topPlaces[j-1].rating; j++ {
 	}
 	share := g.Board.Bank / j
 	for i := range j {
-		pl := g.Players[topPlaces[i].place]
+		pl := g.Players[g.topPlaces[i].place]
 		pl.Bank += share
-		g.pl.StoreCache()
-		g.BroadcastPlayer(g.pl, true)
+		pl.StoreCache()
+	}
+	for i := range j {
+		pl := g.Players[g.topPlaces[i].place]
+		g.BroadcastPlayer(pl, true)
 	}
 	time.Sleep(time.Second * 5)
 }
