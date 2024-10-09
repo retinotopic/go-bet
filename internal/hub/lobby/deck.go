@@ -33,15 +33,14 @@ func (d *Deck) Shuffle() {
 	d.offset = 1
 }
 
-func (d *Deck) Draw(it int) func(yield func(poker.Card) bool) {
-	return func(yield func(poker.Card) bool) {
-		for range it {
-			if d.offset > len(d.cards) {
-				return
-			}
-			yield(d.cards[len(d.cards)-d.offset])
-			d.offset++
+func (d *Deck) Draw(cards poker.CardList, strCards []string) {
+	for i := range cards {
+		if d.offset > len(d.cards) {
+			return
 		}
+		cards[i] = d.cards[len(d.cards)-d.offset]
+		strCards[i] = cards[i].String()
+		d.offset++
 	}
 
 }

@@ -20,7 +20,6 @@ func (c *CustomImpl) Validate(ctrl Ctrl) {
 		//admin started the game, and also place 0 represents the table of cards itself
 		if ctrl.Place == -1 {
 			c.HasBegun = true
-			i := 0
 			c.Board.Bank = ctrl.CtrlBet
 			sec, err := strconv.ParseInt(ctrl.Message, 10, 0)
 			if err != nil {
@@ -28,20 +27,24 @@ func (c *CustomImpl) Validate(ctrl Ctrl) {
 			}
 			c.Board.Deadline = sec
 			//at game start add occupied seats at the table to players
-			c.MapUsers.Mtx.RLock()
-			for _, val := range c.MapUsers.M {
+			c.AllUsers.Mtx.RLock()
+			i := 0
+			for _, val := range c.AllUsers.M {
+				if i == 8 {
+					break
+				}
 				if val.Place >= 0 {
 					c.Players[i] = val
 					i++
 				}
 			}
-			c.MapUsers.Mtx.RUnlock()
+			c.AllUsers.Mtx.RUnlock()
 
 			c.StartGameCh <- true
-		} else {
-			c.MapUsers.Mtx.RLock()
-			pl, ok := c.MapUsers.M[ctrl.Plr.User_id]
-			c.MapUsers.Mtx.RUnlock()
+		} else { // admin approves player seat
+			c.AllUsers.Mtx.RLock()
+			c.AllUsers.M[ctrl.Plr.User_id]
+			c.AllUsers.Mtx.RUnlock()
 			if ok {
 				pl.Place = ctrl.Place
 				pl.cache = pl.StoreCache()
@@ -49,13 +52,15 @@ func (c *CustomImpl) Validate(ctrl Ctrl) {
 			}
 		}
 	} else if ctrl.Place >= 0 && ctrl.Place <= 7 {
-		//player's request to be at the table
-		ctrl.Plr.cache = ctrl.Plr.StoreCache()
-		WriteTimeout(time.Second*5, c.Admin.Conn, ctrl.Plr.GetCache())
+		c.AllUsers.Mtx.RLock()
+		if !c.Seats[ctrl.Plr.Place] {
+			WriteTimeout(time.Second*5, c.Admin.Conn, ctrl.Plr.StoreCache())
+		}
+		c.AllUsers.Mtx.RUnlock()
 	} else if ctrl.Place == -2 && ctrl.Plr.Place >= 0 { // player leaves
-		c.MapUsers.Mtx.RLock()
-		pl, ok := c.MapUsers.M[ctrl.Plr.User_id] // admin approves player seat
-		c.MapUsers.Mtx.RUnlock()
+		c.AllUsers.Mtx.RLock()
+		pl, ok := c.AllUsers.M[ctrl.Plr.User_id]
+		c.AllUsers.Mtx.RUnlock()
 		if ok {
 			pl.Place = ctrl.Place
 			pl.cache = pl.StoreCache()

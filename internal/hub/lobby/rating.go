@@ -27,19 +27,26 @@ func (r *RatingImpl) PlayerOut(plr []PlayUnit, place int) {
 	baseChange := 30
 	middlePlace := float64(len(r.Players)+1) / 2
 	for i := range plr {
+		defer plr[i].Conn.CloseNow()
 		rating := int(math.Round(float64(baseChange) * (middlePlace - float64(place)) / (middlePlace - 1)))
 		userid, err := strconv.Atoi(plr[i].User_id)
+		if err != nil {
+			return
+		}
 		data, err := r.q.NewMessage(userid, rating)
 		if err != nil {
-			r.q.PublishTask(data, 5)
+			return
+		}
+		r.q.PublishTask(data, 5)
+		if err != nil {
+			return
 		}
 
-		r.MapUsers.Mtx.Lock()
-		delete(r.MapUsers.M, plr[i].User_id)
-		r.MapUsers.Mtx.Unlock()
+		r.AllUsers.Mtx.Lock()
+		delete(r.AllUsers.M, plr[i].User_id)
+		r.AllUsers.Mtx.Unlock()
 
 		WriteTimeout(time.Second*5, plr[i].Conn, []byte(`{"GameOverPlace":"`+strconv.Itoa(place)+`"}`))
-		plr[i].Conn.CloseNow()
 	}
 	if place == 1 {
 		for range 3 {

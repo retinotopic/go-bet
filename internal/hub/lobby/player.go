@@ -8,25 +8,19 @@ import (
 	"github.com/coder/websocket"
 )
 
+type MapUsers struct {
+	M   map[string]*PlayUnit // id to user/player
+	Mtx sync.RWMutex
+}
+
 type PlayersRing struct {
 	Players  []*PlayUnit
+	AllUsers MapUsers
 	Idx      int
 	Board    GameBoard
 	Blindlvl int
+	itermtx  sync.RWMutex
 }
-
-// small blind is calculated via: initial player stack * stackShare[i]
-var stackShare = []float32{
-	0.01,
-	0.02,
-	0.03,
-	0.05,
-	0.075,
-	0.1,
-	0.15,
-	0.20,
-	0.25,
-	0.3}
 
 func (rs *PlayersRing) Next(offset int) *PlayUnit {
 	pl := rs.Players[rs.Idx]
@@ -42,20 +36,22 @@ func (rs *PlayersRing) NextDealer(start, offset int) int {
 }
 
 type PlayUnit struct {
-	Cards    []string        `json:"Cards"`
-	IsFold   bool            `json:"IsFold"`
-	IsAway   bool            `json:"IsAway"`
-	HasActed bool            `json:"HasActed"`
-	Bank     int             `json:"Bank"`
-	Bet      int             `json:"Bet"`
-	Place    int             `json:"Place"`
-	TimeTurn int64           `json:"TimeTurn"` // turn time in seconds
-	Name     string          `json:"Name"`
-	User_id  string          `json:"UserId"`
-	Conn     *websocket.Conn `json:"-"`
-	mtx      sync.RWMutex    `json:"-"`
-	cache    []byte          `json:"-"`
-	cards    []poker.Card    `json:"-"`
+	Cards        []string        `json:"Cards"`
+	IsFold       bool            `json:"IsFold"`
+	IsAway       bool            `json:"IsAway"`
+	IsEliminated bool            `json:"IsEliminated"`
+	HasActed     bool            `json:"HasActed"`
+	Bank         int             `json:"Bank"`
+	Bet          int             `json:"Bet"`
+	Place        int             `json:"Place"`
+	TimeTurn     int64           `json:"TimeTurn"` // turn time in seconds
+	Name         string          `json:"Name"`
+	User_id      string          `json:"UserId"`
+	RingId       int             `json:"-"`
+	Conn         *websocket.Conn `json:"-"`
+	mtx          sync.RWMutex    `json:"-"`
+	cache        []byte          `json:"-"`
+	cards        poker.CardList  `json:"-"`
 }
 
 func (p *PlayUnit) GetCache() []byte {
@@ -75,16 +71,16 @@ func (p *PlayUnit) StoreCache() []byte {
 }
 
 type GameBoard struct {
-	Cards       []string     `json:"Cards"`
-	Bank        int          `json:"Bank"`
-	TurnPlace   int          `json:"TurnPlace"`
-	DealerPlace int          `json:"DealerPlace"`
-	Deadline    int64        `json:"Deadline"`
-	Blind       int          `json:"Blind"`
-	mtx         sync.RWMutex `json:"-"`
-	cache       []byte       `json:"-"`
-	cards       []poker.Card `json:"-"`
-	HiddenCards []string     `json:"-"`
+	Cards       []string       `json:"Cards"`
+	Bank        int            `json:"Bank"`
+	TurnPlace   int            `json:"TurnPlace"`
+	DealerPlace int            `json:"DealerPlace"`
+	Deadline    int64          `json:"Deadline"`
+	Blind       int            `json:"Blind"`
+	mtx         sync.RWMutex   `json:"-"`
+	cache       []byte         `json:"-"`
+	cards       poker.CardList `json:"-"`
+	HiddenCards []string       `json:"-"`
 }
 
 func (g *GameBoard) GetCache() []byte {

@@ -11,15 +11,21 @@ import (
 
 type top struct {
 	place  int
-	rating int32
+	rating uint16
 }
 type Implementor interface {
 	Validate(Ctrl)
 	PlayerOut([]*PlayUnit, int)
 }
+type Seats struct {
+	place      uint8 // zero to seven
+	isOccupied bool
+}
 type Game struct {
 	*Lobby
+	Seats       [8]Seats
 	Deck        *Deck
+	pl          *PlayUnit   //current player
 	MaxBet      int         //
 	TurnTimer   *time.Timer //
 	BlindTimer  *time.Timer //
@@ -32,12 +38,11 @@ func (g *Game) tillTurnOrBlind() {
 	for {
 		select {
 		case <-g.TurnTimer.C:
-			idx := g.PlayersRing.Idx
-			g.Players[idx].IsAway = true
-			g.PlayerCh <- Ctrl{Plr: g.Players[idx]}
+			g.pl.IsAway = true
+			g.PlayerCh <- Ctrl{Plr: g.pl}
 		case <-g.BlindTimer.C:
+			g.Blindlvl++
 			if len(stackShare) > g.Blindlvl {
-				g.Blindlvl++
 				g.Board.Blind *= int(stackShare[g.Blindlvl])
 				g.BlindTimer.Reset(time.Minute * 5)
 			} else {
@@ -53,23 +58,25 @@ func (g *Game) Game() {
 	for {
 		select {
 		case <-g.StartGameCh:
-			var pl *PlayUnit
 			var stages int
 			var now int64
-			for _, v := range g.Players { // give the player his initial bank
-				v.Bank = g.Board.Bank
-			}
+			var dur time.Duration
+
 			g.Board.DealerPlace = 0
 
-			g.Board.HiddenCards = make([]string, 5)
-			g.Board.cards = make([]poker.Card, 7)
-			g.Board.Cards = make([]string, 0, 5)
+			g.Board.HiddenCards = make([]string, 5) // hidden cards that haven't come to the table yet (string)
+			g.Board.cards = make([]poker.Card, 7)   // poker.CardList for evaluating hand
+			g.Board.Cards = make([]string, 0, 5)    // current cards on table for json sending
 
 			g.stop = make(chan bool, 1)
 			randsrc := rand.NewSource(int64(new(maphash.Hash).Sum64()))
-			rand.New(randsrc).Shuffle(len(g.PlayersRing.Players), func(i, j int) { // shuffle player seats
-				g.Players[i], g.Players[j] = g.Players[j], g.Players[i]
+			rand.New(randsrc).Shuffle(8, func(i, j int) { // shuffle player seats
+				g.Seats[i], g.Seats[j] = g.Seats[j], g.Seats[i]
 			})
+			for i, v := range g.Players { // give the player his starting stack
+				v.Bank = g.Board.Bank
+				v.Place = int(g.Seats[i].place)
+			}
 			g.DealNewHand()
 			g.TurnTimer = time.NewTimer(time.Second * 10)
 			g.BlindTimer = time.NewTimer(time.Duration(g.Board.Deadline) * time.Minute)
@@ -80,40 +87,41 @@ func (g *Game) Game() {
 			for GAME_LOOP := true; GAME_LOOP; {
 				select {
 				case ctrl, ok := <-g.PlayerCh:
-					if ok && ctrl.Plr.Place == g.PlayersRing.Idx {
+					if ok && ctrl.Plr == g.pl {
 
 						g.TurnTimer.Stop()
 						now = time.Now().Unix()
-						pl = ctrl.Plr
-						if ctrl.CtrlBet > pl.Bank || ctrl.CtrlBet < 0 { // if a player tries to cheat the system or just wants to quit, then we zero his bank
-							pl.Bank = 0
+						g.pl = ctrl.Plr
+						if ctrl.CtrlBet > g.pl.Bank || ctrl.CtrlBet < 0 { // if a player tries to cheat the system or just wants to quit, then we zero his bank
+							g.pl.Bank = 0
+							g.pl.Bet = 0
 							ctrl.CtrlBet = 0
 						}
 
-						if pl.Bet+ctrl.CtrlBet >= g.MaxBet {
-							g.MaxBet = pl.Bet
-							pl.IsAway = false
-							pl.Bet = pl.Bet + ctrl.CtrlBet
-							pl.Bank -= ctrl.CtrlBet
+						if g.pl.Bet+ctrl.CtrlBet >= g.MaxBet {
+							g.MaxBet = g.pl.Bet
+							g.pl.IsAway = false
+							g.pl.Bet = g.pl.Bet + ctrl.CtrlBet
+							g.pl.Bank -= ctrl.CtrlBet
 						} else {
-							pl.IsFold = true
+							g.pl.IsFold = true
 						}
 
-						if !pl.IsAway {
-							pl.TimeTurn += (now - g.Board.Deadline) + 10
-							if pl.TimeTurn > 30 {
-								pl.TimeTurn = 30
+						if !g.pl.IsAway {
+							g.pl.TimeTurn += (now - g.Board.Deadline) + 10
+							if g.pl.TimeTurn > 30 {
+								g.pl.TimeTurn = 30
 							}
 						} else {
-							pl.TimeTurn = 10
+							g.pl.TimeTurn = 10
 						}
-						pl.HasActed = true
-						pl.StoreCache()
-						g.BroadcastPlayer(pl, false)
+						g.pl.HasActed = true
+						g.pl.StoreCache()
+						g.BroadcastPlayer(g.pl, false)
 
-						pl = g.PlayersRing.Next(1)
+						g.pl = g.PlayersRing.Next(1)
 
-						if pl.Bet == g.MaxBet && pl.HasActed {
+						if g.pl.Bet == g.MaxBet && g.pl.HasActed {
 							vabanks := true
 							for _, p := range g.Players {
 								p.HasActed, p.IsFold = false, false
@@ -121,7 +129,7 @@ func (g *Game) Game() {
 									vabanks = false
 								}
 							}
-							if vabanks { // if everyone went "all in" but the river has not yet arrived
+							if vabanks { // if everyone goes "all in" and river has not yet arrived
 								stages = postriver
 								copy(g.Board.Cards, g.Board.HiddenCards)
 								g.Board.StoreCache()
@@ -135,13 +143,13 @@ func (g *Game) Game() {
 							case postriver: //postriver evaluation
 								if ok := g.PostRiver(); ok {
 									GAME_LOOP = false
+									continue
 								}
-								stages = 0
-								continue
+								stages = -1
 							}
 							stages++
 						}
-						dur := time.Duration(pl.TimeTurn)
+						dur = time.Duration(g.pl.TimeTurn)
 						g.Board.Deadline = time.Now().Add(time.Second * dur).Unix()
 						g.TurnTimer.Reset(time.Second * dur)
 						g.Board.StoreCache()
@@ -185,62 +193,63 @@ func (g *Game) PostRiver() (gameOver bool) {
 
 func (g *Game) DealNewHand() {
 	g.Deck.Shuffle()
-	g.Board.HiddenCards = g.Board.HiddenCards[:0] // cards that haven't come to the table yet (also string)
-	g.Board.cards = g.Board.cards[:0]             // current cards on table for evaluating hand
-	g.Board.Cards = g.Board.Cards[:0]             // current cards on table for json sending
-
-	for i, v := range g.Players {
-		v.cards = poker.NewHand()
-		v.Place = i
+	g.Board.Cards = g.Board.Cards[:0] // current cards on table for json sending
+	g.Deck.Draw(g.Board.cards[2:], g.Board.HiddenCards)
+	for _, v := range g.Players {
+		g.Deck.Draw(v.cards, v.Cards)
 		v.IsFold = false
 		v.HasActed = false
 	}
-	c := g.Deck.Draw(7)
-	for i := range c {
-		g.CardsBuffer = append(g.CardsBuffer, c[i].String())
-	}
-	g.Board.cards = make([]poker.Card, 0, 7)
 
 	g.Board.DealerPlace = g.PlayersRing.NextDealer(g.Board.DealerPlace, 1)
 
 	g.PlayersRing.Next(1).Bet = g.Board.Blind
 	g.PlayersRing.Next(1).Bet = g.Board.Blind * 2
 
-	pl := g.PlayersRing.Next(1)
-
-	g.Board.Deadline = time.Now().Add(time.Second * time.Duration(pl.TimeTurn)).Unix()
-	g.BroadcastCh <- Ctrl{Brd: &g.Board}
+	g.pl = g.PlayersRing.Next(1)
 	//send all players to all players (broadcast)
 	for _, pl := range g.Players {
-		g.BroadcastCh <- Ctrl{Plr: pl}
+		g.BroadcastPlayer(pl, false)
 	}
 }
 
 func (g *Game) CalcWinners() {
-	var emptyCard poker.Card
 	topPlaces := make([]top, 0, 8)
-	g.Board.Cards = append(g.Board.Cards, emptyCard, emptyCard)
+
 	for i, v := range g.Players {
-		if !v.IsFold {
-			g.Board.Cards[5] = v.Cards[0]
-			g.Board.Cards[6] = v.Cards[1]
-			eval := poker.Evaluate(g.Board.Cards)
-			poker.RankString()
+		if !v.IsFold && !v.IsAway {
+			g.Board.cards[0] = v.cards[0]
+			g.Board.cards[0] = v.cards[1]
+			eval := g.Board.cards.Evaluate()
 			topPlaces = append(topPlaces, top{rating: eval, place: i})
 		}
 		v.IsFold = false
 	}
 	sort.Slice(topPlaces, func(i, j int) bool {
-		return topPlaces[i].rating > topPlaces[j].rating
+		return topPlaces[i].rating < topPlaces[j].rating
 	})
-	i := 0
-	for ; i == 0 || topPlaces[i].rating == topPlaces[i-1].rating; i++ {
+	j := 0
+	for ; j == 0 || topPlaces[j].rating == topPlaces[j-1].rating; j++ {
 	}
-	share := g.Board.Bank / i
-	for j := range i {
-		pl := g.Players[topPlaces[j].place]
+	share := g.Board.Bank / j
+	for i := range j {
+		pl := g.Players[topPlaces[i].place]
 		pl.Bank += share
-		g.BroadcastCh <- Ctrl{IsExposed: true, Plr: pl}
+		g.pl.StoreCache()
+		g.BroadcastPlayer(g.pl, true)
 	}
 	time.Sleep(time.Second * 5)
 }
+
+// small blind is calculated via: initial player stack * stackShare[i]
+var stackShare = []float32{
+	0.01,
+	0.02,
+	0.03,
+	0.05,
+	0.075,
+	0.1,
+	0.15,
+	0.20,
+	0.25,
+	0.3}
