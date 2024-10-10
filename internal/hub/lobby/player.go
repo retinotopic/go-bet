@@ -9,7 +9,7 @@ import (
 )
 
 type MapUsers struct {
-	M   map[string]*PlayUnit // id to user/player
+	M   map[string]*PlayUnit // userId to user || player
 	Mtx sync.RWMutex
 }
 

@@ -17,7 +17,7 @@ type Queue interface {
 }
 
 func (r *RatingImpl) Validate(ctrl Ctrl) {
-	timer := time.NewTimer(time.Second * time.Duration(ctrl.CtrlInt))
+	timer := time.NewTimer(time.Second * time.Duration(ctrl.CtrlInt)) //pre-set timer
 	for i := range 8 {
 		r.Seats[i].place = uint8(i)
 	}
@@ -26,7 +26,7 @@ func (r *RatingImpl) Validate(ctrl Ctrl) {
 		return
 	}
 }
-func (r *RatingImpl) PlayerOut(plr []PlayUnit, place int) {
+func (r *RatingImpl) PlayerOut(plr []*PlayUnit, place int) {
 	baseChange := 30
 	middlePlace := float64(len(r.Players)+1) / 2
 	for i := range plr {

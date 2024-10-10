@@ -19,7 +19,7 @@ func (c *CustomImpl) Validate(ctrl Ctrl) {
 		c.Admin = ctrl.Plr
 	})
 	if c.Admin == ctrl.Plr {
-		//admin started the game, and also place -1 represents the table of cards itself
+		//admin started the game, and also place -1 represents the GameBoard
 		if ctrl.Place == -1 {
 
 			c.HasBegun = true
@@ -78,7 +78,7 @@ func (c *CustomImpl) Validate(ctrl Ctrl) {
 	}
 
 }
-func (r *CustomImpl) PlayerOut(plr []PlayUnit, place int) {
+func (r *CustomImpl) PlayerOut(plr []*PlayUnit, place int) {
 	for i := range plr {
 		plr[i].Place = -2
 		defer plr[i].StoreCache()

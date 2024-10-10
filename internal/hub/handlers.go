@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"hash/maphash"
 	"net/http"
 	"strconv"
 	"unicode"
@@ -35,7 +36,7 @@ func (h *HubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 	//check for player presence in map
 	user_id, name := middleware.GetUser(r.Context())
 
-	wsurl, err := strconv.ParseUint(r.URL.Path[7:], 10, 0)
+	wsurl, err := strconv.ParseUint(r.PathValue("roomId"), 10, 0)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
@@ -49,7 +50,7 @@ func (h *HubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 		if ok {
 			plr = pl
 		} else {
-			plr = &lobby.PlayUnit{User_id: user_id, Name: name}
+			plr = &lobby.PlayUnit{User_id: user_id, Name: name, Place: -2}
 			lb.AllUsers.M[user_id] = plr
 		}
 		lb.AllUsers.Mtx.Unlock()
@@ -62,6 +63,43 @@ func (h *HubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 		plr.Conn = conn
 		go lb.HandleConn(plr)
 	}
+}
+func (h *HubPump) CreateLobby(w http.ResponseWriter, r *http.Request) {
+	user_id, name := middleware.GetUser(r.Context())
+
+	lb := &lobby.Lobby{}
+	gm := &lobby.Game{Lobby: lb}
+	cstm := &lobby.CustomImpl{Game: gm}
+	gm.Impl = cstm
+	go lb.LobbyStart(gm)
+	isSet := false
+	for !isSet {
+		hash := new(maphash.Hash).Sum64()
+		h.lobby.SetIf(hash, func(previousVale *lobby.Lobby, previousFound bool) (value *lobby.Lobby, set bool) {
+			if !previousFound {
+				lb.AllUsers.M = make(map[string]*lobby.PlayUnit)
+				previousVale = lb
+				previousFound = true
+				isSet = true
+			} else {
+				previousFound = false
+			}
+			return previousVale, previousFound
+		})
+	}
+	lb.AllUsers.Mtx.Lock()
+	plr := &lobby.PlayUnit{User_id: user_id, Name: name, Place: -2}
+	lb.AllUsers.M[user_id] = plr
+	lb.AllUsers.Mtx.Unlock()
+
+	conn, err := websocket.Accept(w, r, nil)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	plr.Conn = conn
+	go lb.HandleConn(plr)
+
 }
 func isNumeric(s string) bool {
 	for _, char := range s {

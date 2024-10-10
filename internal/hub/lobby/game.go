@@ -61,14 +61,14 @@ func (g *Game) Game() {
 			var dur time.Duration
 
 			g.topPlaces = make([]top, 0, 8)     //---\
-			g.winners = make([]*PlayUnit, 0, 8) //	  >----- reusable memory for post-river calculations
+			g.winners = make([]*PlayUnit, 0, 8) //	  >----- reusable memory for post-river evaluation
 			g.losers = make([]*PlayUnit, 0, 8)  //---/
 
 			g.Board.Blind = g.Board.Bank * int(stackShare[g.Blindlvl]) // initial blind
 
-			g.Board.HiddenCards = make([]string, 5) // hidden cards that haven't come to the table yet (string)
-			g.Board.cards = make([]poker.Card, 7)   // poker.CardList for evaluating hand
-			g.Board.Cards = make([]string, 0, 5)    // current cards on table for json sending
+			g.Board.HiddenCards = make([]string, 0, 5) // hidden cards that haven't come to the table yet (string)
+			g.Board.cards = make([]poker.Card, 0, 7)   // poker.CardList for evaluating hand
+			g.Board.Cards = make([]string, 0, 5)       // current cards on table for json sending
 
 			g.stop = make(chan bool, 1)
 			if g.Seats != [8]Seats{} { // if the game is in ranked mode, shuffle seats for randomness
@@ -126,10 +126,12 @@ func (g *Game) Game() {
 
 						g.pl = g.PlayersRing.Next(1)
 
+						//next poker stage if that player is the last one to raise the bet, and he acted at least once
 						if g.pl.Bet == g.MaxBet && g.pl.HasActed {
 							vabanks := true
 							for _, p := range g.Players {
 								p.HasActed, p.IsFold = false, false
+								g.Board.Bank += p.Bet // adding players bets to bank
 								if p.Bank > 0 {
 									vabanks = false
 								}
@@ -257,6 +259,7 @@ func (g *Game) CalcWinners() {
 		pl := g.Players[g.topPlaces[i].place]
 		g.BroadcastPlayer(pl, true)
 	}
+	g.Board.Bank = 0
 	time.Sleep(time.Second * 5)
 }
 

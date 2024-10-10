@@ -36,11 +36,10 @@ type Lobby struct {
 	Url          uint64
 }
 
-func (l *Lobby) LobbyStart() {
-	gm := &Game{Lobby: l}
+func (l *Lobby) LobbyStart(gm *Game) {
 	go gm.Game()
 	l.checkTimeout = time.NewTicker(time.Minute * 3)
-	l.Shutdown = make(chan bool, 10) // for safety reasons set buffer size 10
+	l.Shutdown = make(chan bool, 10)
 	l.PlayerCh = make(chan Ctrl)
 	timeout := time.Minute * 4
 	for {
@@ -62,7 +61,7 @@ func (c *Lobby) HandleConn(plr *PlayUnit) {
 	defer func() {
 		defer c.AllUsers.Mtx.Unlock()
 		c.AllUsers.Mtx.Lock()
-		if plr.Place == -1 {
+		if plr.Place == -2 {
 			delete(c.AllUsers.M, plr.User_id)
 		}
 		plr.Conn.CloseNow()
