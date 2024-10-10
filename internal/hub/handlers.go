@@ -71,7 +71,6 @@ func (h *HubPump) CreateLobby(w http.ResponseWriter, r *http.Request) {
 	gm := &lobby.Game{Lobby: lb}
 	cstm := &lobby.CustomImpl{Game: gm}
 	gm.Impl = cstm
-	go lb.LobbyStart(gm)
 	isSet := false
 	for !isSet {
 		hash := new(maphash.Hash).Sum64()
@@ -81,6 +80,7 @@ func (h *HubPump) CreateLobby(w http.ResponseWriter, r *http.Request) {
 				previousVale = lb
 				previousFound = true
 				isSet = true
+				go lb.LobbyStart(gm)
 			} else {
 				previousFound = false
 			}

@@ -84,5 +84,4 @@ func (r *CustomImpl) PlayerOut(plr []*PlayUnit, place int) {
 		defer plr[i].StoreCache()
 		go WriteTimeout(time.Second*5, plr[i].Conn, []byte(`{"GameOverPlace":"`+strconv.Itoa(place)+`"}`))
 	}
-
 }
