@@ -99,6 +99,10 @@ func (c *Lobby) HandleConn(plr *PlayUnit) {
 			break
 		}
 		plr.IsAway = false
+		if ctrl.CtrlInt == 0 && len(ctrl.CtrlString) != 0 {
+			c.BroadcastBytes([]byte(`{"Message":"` + ctrl.CtrlString + `","Name":"` + plr.Name + `"}`))
+			continue
+		}
 		c.PlayerCh <- ctrl
 		time.Sleep(time.Millisecond * 500)
 	}
@@ -119,14 +123,14 @@ func (l *Lobby) BroadcastPlayer(plr *PlayUnit, IsExposed bool) {
 	}
 
 }
-
-func (l *Lobby) BroadcastBoard(board *GameBoard) {
+func (l *Lobby) BroadcastBytes(b []byte) {
 	defer l.AllUsers.Mtx.RUnlock()
 	l.AllUsers.Mtx.RLock()
 	for _, val := range l.AllUsers.M {
-		go WriteTimeout(time.Second*5, val.Conn, board.GetCache())
+		go WriteTimeout(time.Second*5, val.Conn, b)
 	}
 }
+
 func WriteTimeout(timeout time.Duration, c *websocket.Conn, msg []byte) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()

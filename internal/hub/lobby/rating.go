@@ -28,6 +28,7 @@ func (r *RatingImpl) Validate(ctrl Ctrl) {
 }
 func (r *RatingImpl) PlayerOut(plr []*PlayUnit, place int) {
 	baseChange := 30
+	placemsg := []byte(`{"GameOverPlace":"` + strconv.Itoa(place) + `"}`)
 	middlePlace := float64(len(r.Players)+1) / 2
 	for i := range plr {
 		rating := int(math.Round(float64(baseChange) * (middlePlace - float64(place)) / (middlePlace - 1)))
@@ -45,7 +46,7 @@ func (r *RatingImpl) PlayerOut(plr []*PlayUnit, place int) {
 		}
 		plr[i].Place = -2
 		defer plr[i].StoreCache()
-		go WriteTimeout(time.Second*5, plr[i].Conn, []byte(`{"GameOverPlace":"`+strconv.Itoa(place)+`"}`))
+		go WriteTimeout(time.Second*5, plr[i].Conn, placemsg)
 
 	}
 	if place == 1 {

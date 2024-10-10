@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"unicode"
 
 	json "github.com/bytedance/sonic"
 )
@@ -48,9 +49,10 @@ func (c *CustomImpl) Validate(ctrl Ctrl) {
 			c.StartGameCh <- true
 		} else { // admin approves player at the table
 			c.AllUsers.Mtx.RLock()
-			pl, ok := c.AllUsers.M[ctrl.CtrlString]
+			pl, ok := c.AllUsers.M[ctrl.CtrlString[:ctrl.CtrlInt]]
 			// is user exist && if place index isnt out of range && if place is not occupied
 			if ok && ctrl.Place >= 0 && ctrl.Place <= 7 && !c.Seats[ctrl.Place].isOccupied {
+				pl.Name = ctrl.CtrlString[ctrl.CtrlInt:]
 				c.Seats[ctrl.Place].isOccupied = true
 				pl.Place = ctrl.Place
 				pl.StoreCache()
@@ -79,9 +81,21 @@ func (c *CustomImpl) Validate(ctrl Ctrl) {
 
 }
 func (r *CustomImpl) PlayerOut(plr []*PlayUnit, place int) {
+	placemsg := []byte(`{"GameOverPlace":"` + strconv.Itoa(place) + `"}`)
 	for i := range plr {
 		plr[i].Place = -2
 		defer plr[i].StoreCache()
-		go WriteTimeout(time.Second*5, plr[i].Conn, []byte(`{"GameOverPlace":"`+strconv.Itoa(place)+`"}`))
+		go WriteTimeout(time.Second*5, plr[i].Conn, placemsg)
 	}
+}
+func isAlphanumeric(s string) bool {
+	for _, char := range s {
+		if !unicode.IsLetter(char) && !unicode.IsNumber(char) {
+			return false
+		}
+		if unicode.IsLetter(char) && !((char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z')) {
+			return false
+		}
+	}
+	return true
 }

@@ -139,8 +139,7 @@ func (g *Game) Game() {
 							if vabanks { // if everyone goes "all in" and river has not yet arrived
 								stages = postriver
 								copy(g.Board.Cards, g.Board.HiddenCards)
-								g.Board.StoreCache()
-								g.BroadcastBoard(&g.Board)
+								g.BroadcastBytes(g.Board.StoreCache())
 							}
 							switch stages {
 							case flop: // preflop to flop
@@ -158,10 +157,8 @@ func (g *Game) Game() {
 						}
 						dur = time.Duration(g.pl.TimeTurn)                          //------------\
 						g.Board.Deadline = time.Now().Add(time.Second * dur).Unix() //			   \
-						g.TurnTimer.Reset(time.Second * dur)                        //			    >----- notifying the player of the start of his turn
-						g.Board.StoreCache()                                        //			   /
-						g.BroadcastBoard(&g.Board)                                  //------------/
-
+						g.TurnTimer.Reset(time.Second * dur)                        //			   /----- notifying the player of the start of his turn
+						g.BroadcastBytes(g.Board.StoreCache())                      //------------/
 					}
 				case <-g.Shutdown:
 					GAME_LOOP = false
