@@ -56,7 +56,7 @@ func (g *Game) Game() {
 	for {
 		select {
 		case <-g.StartGameCh:
-			var stages int
+			stages := 0
 			var now int64
 			var dur time.Duration
 
@@ -145,8 +145,8 @@ func (g *Game) Game() {
 								g.Board.Cards = append(g.Board.Cards, g.Board.HiddenCards[0], g.Board.HiddenCards[1], g.Board.HiddenCards[2])
 							case turn, river: // flop to turn, turn to river
 								g.Board.Cards = append(g.Board.Cards, g.Board.HiddenCards[stages+2])
-							case postriver: //postriver evaluation
-								if ok := g.PostRiver(); ok {
+							case postriver: // postriver evaluation
+								if ok := g.PostRiver(); ok { // if postriver() returns true, then end the current game
 									GAME_LOOP = false
 									continue
 								}
@@ -154,11 +154,11 @@ func (g *Game) Game() {
 							}
 							stages++
 						}
-						dur = time.Duration(g.pl.TimeTurn)
-						g.Board.Deadline = time.Now().Add(time.Second * dur).Unix()
-						g.TurnTimer.Reset(time.Second * dur)
-						g.Board.StoreCache()
-						g.BroadcastBoard(&g.Board)
+						dur = time.Duration(g.pl.TimeTurn)                          //------------\
+						g.Board.Deadline = time.Now().Add(time.Second * dur).Unix() //			   \
+						g.TurnTimer.Reset(time.Second * dur)                        //			    >----- notifying the player of the start of his turn
+						g.Board.StoreCache()                                        //			   /
+						g.BroadcastBoard(&g.Board)                                  //------------/
 
 					}
 				case <-g.Shutdown:
@@ -184,7 +184,7 @@ func (g *Game) PostRiver() (gameOver bool) {
 			g.losers = append(g.losers, v)
 		}
 	}
-	g.Impl.PlayerOut(g.losers, len(g.Players))
+	go g.Impl.PlayerOut(g.losers, len(g.Players))
 	g.Players = g.Players[:(len(g.winners))]
 	copy(g.Players, g.winners)
 	g.Idx -= len(g.losers)
@@ -207,7 +207,7 @@ func (g *Game) DealNewHand() {
 	}
 
 	g.Board.DealerPlace = g.PlayersRing.NextDealer(g.Board.DealerPlace, 1)
-	if g.BlindRaise {
+	if g.BlindRaise { // blind raise
 		g.Blindlvl++
 		if len(stackShare) > g.Blindlvl {
 			g.Board.Blind *= int(stackShare[g.Blindlvl])
@@ -221,7 +221,7 @@ func (g *Game) DealNewHand() {
 	g.PlayersRing.Next(1).Bet = g.Board.Blind * 2 // big blind
 
 	g.pl = g.PlayersRing.Next(1)
-	//send all players to all players (broadcast)
+	//send all players to all users in room
 	for _, pl := range g.Players {
 		pl.StoreCache()
 		g.BroadcastPlayer(pl, false)

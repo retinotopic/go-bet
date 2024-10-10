@@ -44,15 +44,15 @@ func (h *HubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 	if ok {
 		var plr *lobby.PlayUnit
 
-		lb.MapUsers.Mtx.Lock()
-		pl, ok := lb.MapUsers.M[user_id]
+		lb.AllUsers.Mtx.Lock()
+		pl, ok := lb.AllUsers.M[user_id]
 		if ok {
 			plr = pl
 		} else {
 			plr = &lobby.PlayUnit{User_id: user_id, Name: name}
-			lb.MapUsers.M[user_id] = plr
+			lb.AllUsers.M[user_id] = plr
 		}
-		lb.MapUsers.Mtx.Unlock()
+		lb.AllUsers.Mtx.Unlock()
 
 		conn, err := websocket.Accept(w, r, nil)
 		if err != nil {

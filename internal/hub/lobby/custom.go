@@ -25,7 +25,7 @@ func (c *CustomImpl) Validate(ctrl Ctrl) {
 			c.HasBegun = true
 			c.Board.Bank = ctrl.CtrlInt
 			sec, err := strconv.ParseInt(ctrl.CtrlString, 10, 0)
-			if err != nil && (sec > 3600 || sec < 0) && (ctrl.CtrlInt < 10000000 || ctrl.CtrlInt > 0) {
+			if err != nil && (sec > 3600 || sec < 0) && (ctrl.CtrlInt > 10000000 || ctrl.CtrlInt < 0) {
 				return
 			}
 			c.Board.Deadline = sec
@@ -46,11 +46,9 @@ func (c *CustomImpl) Validate(ctrl Ctrl) {
 			c.AllUsers.Mtx.RUnlock()
 			c.Seats = [8]Seats{} // to assert that game is custom
 			c.StartGameCh <- true
-		} else { // admin approves player seat
+		} else { // admin approves player at the table
 			c.AllUsers.Mtx.RLock()
 			pl, ok := c.AllUsers.M[ctrl.CtrlString]
-
-			c.AllUsers.Mtx.RUnlock()
 			// is user exist && if place index isnt out of range && if place is not occupied
 			if ok && ctrl.Place >= 0 && ctrl.Place <= 7 && !c.Seats[ctrl.Place].isOccupied {
 				c.Seats[ctrl.Place].isOccupied = true
@@ -58,6 +56,7 @@ func (c *CustomImpl) Validate(ctrl Ctrl) {
 				pl.StoreCache()
 				c.BroadcastPlayer(ctrl.Plr, true)
 			}
+			c.AllUsers.Mtx.RUnlock()
 		}
 	} else if ctrl.Place >= 0 && ctrl.Place <= 7 {
 		//player's request to be at the table
@@ -69,12 +68,13 @@ func (c *CustomImpl) Validate(ctrl Ctrl) {
 	} else if ctrl.Place == -2 && ctrl.Plr.Place >= 0 { // player leaves
 		c.AllUsers.Mtx.RLock()
 		pl, ok := c.AllUsers.M[ctrl.Plr.User_id]
-		c.AllUsers.Mtx.RUnlock()
+		c.Seats[ctrl.Place].isOccupied = false
 		if ok {
 			pl.Place = ctrl.Place
 			pl.cache = pl.StoreCache()
 			c.BroadcastPlayer(ctrl.Plr, true)
 		}
+		c.AllUsers.Mtx.RUnlock()
 	}
 
 }
