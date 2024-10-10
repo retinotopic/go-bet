@@ -47,16 +47,19 @@ func (c *CustomImpl) Validate(ctrl Ctrl) {
 			c.AllUsers.Mtx.RUnlock()
 			c.Seats = [8]Seats{} // to assert that game is custom
 			c.StartGameCh <- true
-		} else { // admin approves player at the table
+		} else if ctrl.CtrlInt < len(ctrl.CtrlString) { // admin approves player at the table
 			c.AllUsers.Mtx.RLock()
 			pl, ok := c.AllUsers.M[ctrl.CtrlString[:ctrl.CtrlInt]]
 			// is user exist && if place index isnt out of range && if place is not occupied
 			if ok && ctrl.Place >= 0 && ctrl.Place <= 7 && !c.Seats[ctrl.Place].isOccupied {
-				pl.Name = ctrl.CtrlString[ctrl.CtrlInt:]
-				c.Seats[ctrl.Place].isOccupied = true
-				pl.Place = ctrl.Place
-				pl.StoreCache()
-				c.BroadcastPlayer(ctrl.Plr, true)
+				name := ctrl.CtrlString[ctrl.CtrlInt:]
+				if isAlphanumeric(name) {
+					pl.Name = name
+					c.Seats[ctrl.Place].isOccupied = true
+					pl.Place = ctrl.Place
+					pl.StoreCache()
+					c.BroadcastPlayer(ctrl.Plr, true)
+				}
 			}
 			c.AllUsers.Mtx.RUnlock()
 		}

@@ -21,7 +21,7 @@ func (h *HubPump) FindGame(w http.ResponseWriter, r *http.Request) {
 	url, ok := h.players.Load(user_id)
 
 	if ok && len(url) != 0 {
-		w.Write([]byte(url))
+		w.Write([]byte(`{"URL":"` + url + `"}`))
 	} else {
 		conn, err := websocket.Accept(w, r, nil)
 		if err != nil {
