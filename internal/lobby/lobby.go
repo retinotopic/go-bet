@@ -17,8 +17,7 @@ const (
 	postriver
 )
 
-type Ctrl struct { //control union
-	IsExposed  bool      `json:"-"` // means whether the cards should be shown to everyone
+type Ctrl struct {
 	Place      int       `json:"Place"`
 	CtrlInt    int       `json:"CtrlInt"`
 	CtrlString string    `json:"CtrlString"`
@@ -98,6 +97,7 @@ func (c *Lobby) HandleConn(plr *PlayUnit) {
 		if err != nil {
 			break
 		}
+		c.lastResponse = time.Now()
 		plr.IsAway = false
 		if ctrl.CtrlInt == 0 && len(ctrl.CtrlString) != 0 {
 			c.BroadcastBytes([]byte(`{"Message":"` + ctrl.CtrlString + `","Name":"` + plr.Name + `"}`))

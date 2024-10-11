@@ -10,7 +10,7 @@ import (
 	"github.com/coder/websocket"
 	csmap "github.com/mhmtszr/concurrent-swiss-map"
 
-	"github.com/retinotopic/go-bet/internal/hub/lobby"
+	"github.com/retinotopic/go-bet/internal/lobby"
 )
 
 func NewPump(lenBuffer int, queue lobby.Queue) *HubPump {

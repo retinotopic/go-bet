@@ -7,7 +7,7 @@ import (
 	"unicode"
 
 	"github.com/coder/websocket"
-	"github.com/retinotopic/go-bet/internal/hub/lobby"
+	"github.com/retinotopic/go-bet/internal/lobby"
 	"github.com/retinotopic/go-bet/internal/middleware"
 )
 

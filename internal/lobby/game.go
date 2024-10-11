@@ -197,7 +197,7 @@ func (g *Game) PostRiver() (gameOver bool) {
 
 func (g *Game) DealNewHand() {
 	g.Deck.Shuffle()
-	g.Board.Cards = g.Board.Cards[:0] // current cards on table for json sending
+	g.Board.Cards = g.Board.Cards[:0]
 	g.Deck.Draw(g.Board.cards[2:], g.Board.HiddenCards)
 	for _, v := range g.Players {
 		g.Deck.Draw(v.cards, v.Cards[1:])
@@ -220,7 +220,7 @@ func (g *Game) DealNewHand() {
 	g.PlayersRing.Next(1).Bet = g.Board.Blind * 2 // big blind
 
 	g.pl = g.PlayersRing.Next(1)
-	//send all players to all users in room
+	//send all current players to all users in room
 	for _, pl := range g.Players {
 		pl.StoreCache()
 		g.BroadcastPlayer(pl, false)
