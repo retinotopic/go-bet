@@ -1,19 +1,27 @@
 package lobby
 
 import (
-	"math/rand"
+	crand "crypto/rand"
+	mrand "math/rand/v2"
 
 	"github.com/Nerdmaster/poker"
 )
 
 type Deck struct {
-	rnd    *rand.Rand
+	rnd    *mrand.Rand
 	offset int
 	cards  poker.CardList
 }
 
-func NewDeck(rndSource rand.Source) *Deck {
-	var d = &Deck{rnd: rand.New(rndSource)}
+func CryptoBuf() (buf [32]byte) {
+	bufs := make([]byte, 32)
+	crand.Read(bufs)
+	copy(buf[:], bufs)
+	return buf
+}
+
+func NewDeck() *Deck {
+	var d = &Deck{rnd: mrand.New(mrand.NewChaCha8(CryptoBuf()))}
 	d.cards = make(poker.CardList, 52)
 	d.offset = 1
 	var idx = 0
