@@ -4,7 +4,6 @@ import (
 	"context"
 	"hash/maphash"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/coder/websocket"
@@ -31,7 +30,6 @@ type HubPump struct {
 	lobby      *csmap.CsMap[uint64, *lobby.Lobby]
 	players    *csmap.CsMap[string, string]
 	reqPlayers chan *lobby.PlayUnit
-	wg         sync.WaitGroup
 }
 
 func (h *HubPump) requests() {

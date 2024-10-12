@@ -54,30 +54,31 @@ func (g *Game) tillTurnOrBlind() {
 }
 
 func (g *Game) Game() {
+	stages := 0
+	var now int64
+	var dur time.Duration
+
+	var buf [32]byte
+	bufs := make([]byte, 32)
+	crand.Read(bufs)
+	copy(buf[:], bufs)
+	rand := mrand.New(mrand.NewChaCha8(buf))
+	g.Deck = NewDeck(rand)
+
+	g.topPlaces = make([]top, 0, 8)     //---\
+	g.winners = make([]*PlayUnit, 0, 8) //	  >----- reusable memory for post-river evaluation
+	g.losers = make([]*PlayUnit, 0, 8)  //---/
+
+	g.Board.HiddenCards = make([]string, 0, 5) // hidden cards that haven't come to the table yet (string)
+	g.Board.cards = make([]poker.Card, 0, 7)   // poker.CardList for evaluating hand
+	g.Board.Cards = make([]string, 0, 5)       // current cards on table for json sending
 	for {
 		select {
 		case <-g.StartGameCh:
-			stages := 0
-			var now int64
-			var dur time.Duration
-
-			var buf [32]byte
-			bufs := make([]byte, 32)
-			crand.Read(bufs)
-			copy(buf[:], bufs)
-			rand := mrand.New(mrand.NewChaCha8(buf))
-			g.Deck = NewDeck(rand)
-
-			g.topPlaces = make([]top, 0, 8)     //---\
-			g.winners = make([]*PlayUnit, 0, 8) //	  >----- reusable memory for post-river evaluation
-			g.losers = make([]*PlayUnit, 0, 8)  //---/
 
 			g.Board.Blind = g.Board.Bank * int(stackShare[g.Blindlvl]) // initial blind
 			g.InitialPlayerBank = g.Board.Bank
 			g.Board.Bank = 0
-			g.Board.HiddenCards = make([]string, 0, 5) // hidden cards that haven't come to the table yet (string)
-			g.Board.cards = make([]poker.Card, 0, 7)   // poker.CardList for evaluating hand
-			g.Board.Cards = make([]string, 0, 5)       // current cards on table for json sending
 
 			g.stop = make(chan bool, 1)
 			if g.Seats != [8]Seats{} { // if the game is in ranked mode, shuffle seats for randomness
@@ -169,10 +170,10 @@ func (g *Game) Game() {
 						g.BroadcastBytes(g.Board.StoreCache())                      //------------/
 					}
 				case <-g.Shutdown:
-					GAME_LOOP = false
+					return
 				}
 			}
-		case ctrl := <-g.PlayerCh:
+		case ctrl := <-g.PlayerCh: // pre-game board tuning
 			g.Impl.Validate(ctrl)
 		case <-g.Shutdown:
 			return
@@ -208,7 +209,7 @@ func (g *Game) DealNewHand() {
 	g.Board.Cards = g.Board.Cards[:0]
 	g.Deck.Draw(g.Board.cards[2:], g.Board.HiddenCards)
 	for _, v := range g.Players {
-		g.Deck.Draw(v.cards, v.Cards[1:])
+		g.Deck.Draw(v.CardsEval, v.Cards[1:])
 		v.IsFold = false
 		v.HasActed = false
 	}
@@ -239,8 +240,8 @@ func (g *Game) CalcWinners() {
 	g.topPlaces = g.topPlaces[:0]
 	for i, v := range g.Players {
 		if !v.IsFold && !v.IsAway {
-			g.Board.cards[0] = v.cards[0]
-			g.Board.cards[1] = v.cards[1]
+			g.Board.cards[0] = v.CardsEval[0]
+			g.Board.cards[1] = v.CardsEval[1]
 
 			eval := g.Board.cards.Evaluate()
 			v.Cards[0] = poker.GetHandRank(eval).String()

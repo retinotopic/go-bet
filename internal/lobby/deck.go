@@ -1,19 +1,19 @@
 package lobby
 
 import (
-	mrand "math/rand/v2"
+	"math/rand/v2"
 
 	"github.com/Nerdmaster/poker"
 )
 
 type Deck struct {
-	rnd    *mrand.Rand
+	rnd    *rand.Rand
 	offset int
 	cards  poker.CardList
 }
 
-func NewDeck(src mrand.Source) *Deck {
-	var d = &Deck{rnd: mrand.New(src)}
+func NewDeck(src rand.Source) *Deck {
+	var d = &Deck{rnd: rand.New(src)}
 	d.cards = make(poker.CardList, 52)
 	d.offset = 1
 	var idx = 0

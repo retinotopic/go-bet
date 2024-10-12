@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"unicode"
 
+	"github.com/Nerdmaster/poker"
 	"github.com/coder/websocket"
 	"github.com/retinotopic/go-bet/internal/lobby"
 	"github.com/retinotopic/go-bet/internal/middleware"
@@ -28,7 +29,7 @@ func (h *HubPump) FindGame(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		h.reqPlayers <- &lobby.PlayUnit{User_id: user_id, Name: name, Conn: conn}
+		h.reqPlayers <- &lobby.PlayUnit{User_id: user_id, Name: name, Conn: conn, Cards: make([]string, 0, 3), CardsEval: make([]poker.Card, 0, 2)}
 	}
 
 }
@@ -50,7 +51,7 @@ func (h *HubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 		if ok {
 			plr = pl
 		} else {
-			plr = &lobby.PlayUnit{User_id: user_id, Name: name, Place: -2}
+			plr = &lobby.PlayUnit{User_id: user_id, Name: name, Place: -2, Cards: make([]string, 0, 3), CardsEval: make([]poker.Card, 0, 2)}
 			lb.AllUsers.M[user_id] = plr
 		}
 		lb.AllUsers.Mtx.Unlock()
@@ -72,13 +73,13 @@ func (h *HubPump) CreateLobby(w http.ResponseWriter, r *http.Request) {
 	cstm := &lobby.CustomImpl{Game: gm}
 	gm.Impl = cstm
 	isSet := false
-	plr := &lobby.PlayUnit{User_id: user_id, Name: name, Place: -2}
+	var plr *lobby.PlayUnit
 	for !isSet {
 		hash := new(maphash.Hash).Sum64()
 		h.lobby.SetIf(hash, func(previousVale *lobby.Lobby, previousFound bool) (value *lobby.Lobby, set bool) {
 			if !previousFound {
 				lb.AllUsers.M = make(map[string]*lobby.PlayUnit)
-				plr := &lobby.PlayUnit{User_id: user_id, Name: name, Place: -2}
+				plr = &lobby.PlayUnit{User_id: user_id, Name: name, Place: -2, Cards: make([]string, 0, 3), CardsEval: make([]poker.Card, 0, 2)}
 				lb.AllUsers.M[user_id] = plr
 				previousVale = lb
 				previousFound = true
@@ -90,13 +91,12 @@ func (h *HubPump) CreateLobby(w http.ResponseWriter, r *http.Request) {
 			return previousVale, previousFound
 		})
 	}
-
-	conn, err := websocket.Accept(w, r, nil)
+	var err error
+	plr.Conn, err = websocket.Accept(w, r, nil)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	plr.Conn = conn
 	go lb.HandleConn(plr)
 
 }
