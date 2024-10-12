@@ -1,8 +1,8 @@
 package lobby
 
 import (
-	"hash/maphash"
-	"math/rand"
+	crand "crypto/rand"
+	mrand "math/rand/v2"
 	"sort"
 	"time"
 
@@ -23,19 +23,20 @@ type Seats struct {
 }
 type Game struct {
 	*Lobby
-	Seats       [8]Seats
-	topPlaces   []top
-	winners     []*PlayUnit
-	losers      []*PlayUnit
-	Deck        *Deck
-	pl          *PlayUnit //current player
-	MaxBet      int
-	TurnTimer   *time.Timer
-	BlindTimer  *time.Timer
-	StartGameCh chan bool
-	stop        chan bool
-	BlindRaise  bool
-	Impl        Implementor
+	InitialPlayerBank int
+	Seats             [8]Seats
+	topPlaces         []top
+	winners           []*PlayUnit
+	losers            []*PlayUnit
+	Deck              *Deck
+	pl                *PlayUnit //current player
+	MaxBet            int
+	TurnTimer         *time.Timer
+	BlindTimer        *time.Timer
+	StartGameCh       chan bool
+	stop              chan bool
+	BlindRaise        bool
+	Impl              Implementor
 }
 
 func (g *Game) tillTurnOrBlind() {
@@ -60,20 +61,27 @@ func (g *Game) Game() {
 			var now int64
 			var dur time.Duration
 
+			var buf [32]byte
+			bufs := make([]byte, 32)
+			crand.Read(bufs)
+			copy(buf[:], bufs)
+			rand := mrand.New(mrand.NewChaCha8(buf))
+			g.Deck = NewDeck(rand)
+
 			g.topPlaces = make([]top, 0, 8)     //---\
 			g.winners = make([]*PlayUnit, 0, 8) //	  >----- reusable memory for post-river evaluation
 			g.losers = make([]*PlayUnit, 0, 8)  //---/
 
 			g.Board.Blind = g.Board.Bank * int(stackShare[g.Blindlvl]) // initial blind
-
+			g.InitialPlayerBank = g.Board.Bank
+			g.Board.Bank = 0
 			g.Board.HiddenCards = make([]string, 0, 5) // hidden cards that haven't come to the table yet (string)
 			g.Board.cards = make([]poker.Card, 0, 7)   // poker.CardList for evaluating hand
 			g.Board.Cards = make([]string, 0, 5)       // current cards on table for json sending
 
 			g.stop = make(chan bool, 1)
 			if g.Seats != [8]Seats{} { // if the game is in ranked mode, shuffle seats for randomness
-				randsrc := rand.NewSource(int64(new(maphash.Hash).Sum64()))
-				rand.New(randsrc).Shuffle(8, func(i, j int) {
+				rand.Shuffle(8, func(i, j int) {
 					g.Seats[i], g.Seats[j] = g.Seats[j], g.Seats[i]
 				})
 				for i, v := range g.Players { // give the player his starting stack
@@ -209,7 +217,7 @@ func (g *Game) DealNewHand() {
 	if g.BlindRaise { // blind raise
 		g.Blindlvl++
 		if len(stackShare) > g.Blindlvl {
-			g.Board.Blind *= int(stackShare[g.Blindlvl])
+			g.Board.Blind = g.InitialPlayerBank * int(stackShare[g.Blindlvl])
 			g.BlindTimer.Reset(time.Minute * 5)
 		} else {
 			g.BlindTimer.Stop()
