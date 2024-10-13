@@ -17,13 +17,6 @@ const (
 	postriver
 )
 
-type Ctrl struct {
-	Place      int       `json:"Place"`
-	CtrlInt    int       `json:"CtrlInt"`
-	CtrlString string    `json:"CtrlString"`
-	Plr        *PlayUnit `json:"-"`
-}
-
 type Lobby struct {
 	PlayersRing
 	HasBegun     bool
@@ -58,30 +51,33 @@ func (l *Lobby) LobbyStart(gm *Game) {
 
 func (c *Lobby) HandleConn(plr *PlayUnit) {
 	defer func() {
-		defer c.AllUsers.Mtx.Unlock()
-		c.AllUsers.Mtx.Lock()
 		if plr.Place == -2 {
+			c.AllUsers.Mtx.Lock()
 			delete(c.AllUsers.M, plr.User_id)
+			c.AllUsers.Mtx.Unlock()
 		}
 		plr.Conn.CloseNow()
 	}()
-	g := errgroup.Group{}
-	g.Go(func() error {
-		return WriteTimeout(time.Second*5, plr.Conn, c.Board.GetCache())
-	})
+
 	isEmpty := true
 	c.AllUsers.Mtx.RLock()
+
+	g := errgroup.Group{}
+	g.Go(func() error {
+		return WriteTimeout(time.Second*5, plr.Conn, c.Board.cache)
+	})
 	for _, v := range c.AllUsers.M { // load current state of the game
 		if v.Place >= 0 {
 			if v == plr {
 				isEmpty = false
 			}
 			g.Go(func() error {
-				return WriteTimeout(time.Second*5, plr.Conn, EmptyCards(v.GetCache(), isEmpty))
+				return WriteTimeout(time.Second*5, plr.Conn, EmptyCards(v.cache, isEmpty))
 			})
 			isEmpty = true
 		}
 	}
+
 	c.AllUsers.Mtx.RUnlock()
 	if err := g.Wait(); err != nil {
 		return
@@ -108,7 +104,11 @@ func (c *Lobby) HandleConn(plr *PlayUnit) {
 	}
 }
 func (l *Lobby) BroadcastPlayer(plr *PlayUnit, IsExposed bool) {
-	defer l.AllUsers.Mtx.RUnlock()
+
+	l.AllUsers.Mtx.Lock()
+	plr.StoreCache()
+	l.AllUsers.Mtx.Unlock()
+
 	l.AllUsers.Mtx.RLock()
 	var isEmpty bool
 	for _, val := range l.AllUsers.M {
@@ -118,17 +118,31 @@ func (l *Lobby) BroadcastPlayer(plr *PlayUnit, IsExposed bool) {
 		} else {
 			isEmpty = true
 		}
-		go WriteTimeout(time.Second*5, val.Conn, EmptyCards(plr.GetCache(), isEmpty))
+		go WriteTimeout(time.Second*5, val.Conn, EmptyCards(plr.cache, isEmpty))
 
 	}
+	l.AllUsers.Mtx.RUnlock()
+
+}
+func (l *Lobby) BroadcastBoard(brd *GameBoard) {
+
+	l.AllUsers.Mtx.Lock()
+	brd.StoreCache()
+	l.AllUsers.Mtx.Unlock()
+
+	l.AllUsers.Mtx.RLock()
+	for _, val := range l.AllUsers.M {
+		go WriteTimeout(time.Second*5, val.Conn, brd.cache)
+	}
+	l.AllUsers.Mtx.RUnlock()
 
 }
 func (l *Lobby) BroadcastBytes(b []byte) {
-	defer l.AllUsers.Mtx.RUnlock()
 	l.AllUsers.Mtx.RLock()
 	for _, val := range l.AllUsers.M {
 		go WriteTimeout(time.Second*5, val.Conn, b)
 	}
+	l.AllUsers.Mtx.RUnlock()
 }
 
 func WriteTimeout(timeout time.Duration, c *websocket.Conn, msg []byte) error {

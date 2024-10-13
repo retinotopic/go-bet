@@ -130,7 +130,6 @@ func (g *Game) Game() {
 							g.pl.TimeTurn = 10
 						}
 						g.pl.HasActed = true
-						g.pl.StoreCache()
 						g.BroadcastPlayer(g.pl, false)
 
 						g.pl = g.PlayersRing.Next(1)
@@ -148,7 +147,7 @@ func (g *Game) Game() {
 							if vabanks { // if everyone goes "all in" and river has not yet arrived
 								stages = postriver
 								copy(g.Board.Cards, g.Board.HiddenCards)
-								g.BroadcastBytes(g.Board.StoreCache())
+								g.BroadcastBoard(&g.Board)
 							}
 							switch stages {
 							case flop: // preflop to flop
@@ -167,7 +166,7 @@ func (g *Game) Game() {
 						dur = time.Duration(g.pl.TimeTurn)                          //------------\
 						g.Board.Deadline = time.Now().Add(time.Second * dur).Unix() //			   \
 						g.TurnTimer.Reset(time.Second * dur)                        //			   /----- notifying the player of the start of his turn
-						g.BroadcastBytes(g.Board.StoreCache())                      //------------/
+						g.BroadcastBoard(&g.Board)                                  //------------/
 					}
 				case <-g.Shutdown:
 					return
@@ -206,6 +205,7 @@ func (g *Game) PostRiver() (gameOver bool) {
 
 func (g *Game) DealNewHand() {
 	g.Deck.Shuffle()
+
 	g.Board.Cards = g.Board.Cards[:0]
 	g.Deck.Draw(g.Board.cards[2:], g.Board.HiddenCards)
 	for _, v := range g.Players {
@@ -213,7 +213,6 @@ func (g *Game) DealNewHand() {
 		v.IsFold = false
 		v.HasActed = false
 	}
-
 	g.Board.DealerPlace = g.PlayersRing.NextDealer(g.Board.DealerPlace, 1)
 	if g.BlindRaise { // blind raise
 		g.Blindlvl++
@@ -225,13 +224,13 @@ func (g *Game) DealNewHand() {
 		}
 		g.BlindRaise = false
 	}
+
 	g.PlayersRing.Next(1).Bet = g.Board.Blind     // small blind
 	g.PlayersRing.Next(1).Bet = g.Board.Blind * 2 // big blind
 
 	g.pl = g.PlayersRing.Next(1)
 	//send all current players to all users in room
 	for _, pl := range g.Players {
-		pl.StoreCache()
 		g.BroadcastPlayer(pl, false)
 	}
 }
@@ -259,7 +258,6 @@ func (g *Game) CalcWinners() {
 	for i := range j {
 		pl := g.Players[g.topPlaces[i].place]
 		pl.Bank += share
-		pl.StoreCache()
 	}
 	for i := range j {
 		pl := g.Players[g.topPlaces[i].place]
@@ -268,16 +266,3 @@ func (g *Game) CalcWinners() {
 	g.Board.Bank = 0
 	time.Sleep(time.Second * 5)
 }
-
-// small blind is calculated via: initial player stack * stackShare[i]
-var stackShare = []float32{
-	0.01,
-	0.02,
-	0.03,
-	0.05,
-	0.075,
-	0.1,
-	0.15,
-	0.20,
-	0.25,
-	0.3}
