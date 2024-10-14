@@ -8,14 +8,14 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/google/uuid"
+	"github.com/lithammer/shortuuid/v4"
 )
 
 var secret = []byte(os.Getenv("SECRET_KEY"))
 
 func WriteCookie(w http.ResponseWriter) *http.Cookie {
 	mac := hmac.New(sha256.New, secret)
-	str := uuid.New().String()
+	str := shortuuid.New()
 	cookie := &http.Cookie{Secure: true, Path: "/", HttpOnly: true}
 	mac.Write([]byte(str))
 	signature := base64.StdEncoding.EncodeToString(mac.Sum(nil))
