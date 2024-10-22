@@ -17,6 +17,7 @@ import (
 type Router struct {
 	Addr        string
 	AddrQueue   string
+	RoutingKey  string
 	ConfigQueue queue.Config
 	Auth        auth.ProviderMap
 }
@@ -40,10 +41,12 @@ func (r *Router) Run() error {
 	if err := sqldb.Close(); err != nil {
 		return err
 	}
-	queue := queue.NewQueue(r.AddrQueue, r.ConfigQueue.Consume, r.ConfigQueue.QueueDeclare, db.ChangeRating)
-	queue.TryConnect()
+	producer := &queue.Producer{Addr: r.AddrQueue, Ex: r.ConfigQueue.Exchange, RoutingKey: r.RoutingKey}
+	producer.TryConnect()
 
-	hub := hub.NewPump(1250, queue)
+	hub := hub.NewPump(1250, producer)
+	consumer := &queue.Consumer{Addr: r.AddrQueue, Ex: r.ConfigQueue.Exchange, RoutingKey: r.RoutingKey}
+	consumer.TryConnect()
 
 	middleware := middleware.UserMiddleware{GetUser: db.GetUser, GetProvider: r.Auth.GetProvider, WriteCookie: auth.WriteCookie, ReadCookie: auth.ReadCookie}
 	hConnectLobby := http.HandlerFunc(hub.ConnectLobby)

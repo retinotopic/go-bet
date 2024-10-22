@@ -7,14 +7,11 @@ import (
 	"github.com/retinotopic/tinyauth/provider"
 )
 
-type CookieReadWriter interface {
-	WriteCookie(http.ResponseWriter, string) *http.Cookie
-	ReadCookie(*http.Request) (string, error)
-}
 type UserMiddleware struct {
 	GetUser     func(string) (int, string, error)
 	GetProvider func(http.ResponseWriter, *http.Request) (provider.Provider, error)
-	CookieReadWriter
+	WriteCookie func(http.ResponseWriter) *http.Cookie
+	ReadCookie  func(*http.Request, *http.Cookie) (string, error)
 }
 
 func (um *UserMiddleware) FetchUser(next http.Handler) http.Handler {
@@ -26,10 +23,15 @@ func (um *UserMiddleware) FetchUser(next http.Handler) http.Handler {
 		}
 		sub, err := prvdr.FetchUser(w, r)
 		if err != nil {
-			user_id, err = um.ReadCookie(r)
+			user_id, err = um.ReadCookie(r, nil)
 			if err != nil {
-				um.WriteCookie(w, name)
+				user_id, err = um.ReadCookie(r, um.WriteCookie(w))
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
 			}
+			name = "guest"
 		} else {
 			var ident int
 			ident, name, err = um.GetUser(sub)

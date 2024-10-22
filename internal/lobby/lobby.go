@@ -7,7 +7,6 @@ import (
 
 	json "github.com/bytedance/sonic"
 	"github.com/coder/websocket"
-	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -60,28 +59,31 @@ func (c *Lobby) HandleConn(plr *PlayUnit) {
 	}()
 
 	isEmpty := true
-	c.AllUsers.Mtx.RLock()
+	err := func() (err error) {
+		c.AllUsers.Mtx.RLock()
+		defer func(data []byte) {
+			err = WriteTimeout(time.Second*5, plr.Conn, data)
+		}(c.Board.cache)
+		for _, v := range c.AllUsers.M { // load current state of the game
+			if v.Place >= 0 {
+				if v == plr {
+					isEmpty = false
+				}
 
-	g := errgroup.Group{}
-	g.Go(func() error {
-		return WriteTimeout(time.Second*5, plr.Conn, c.Board.cache)
-	})
-	for _, v := range c.AllUsers.M { // load current state of the game
-		if v.Place >= 0 {
-			if v == plr {
-				isEmpty = false
+				defer func(data []byte) {
+					err = WriteTimeout(time.Second*5, plr.Conn, data)
+				}(EmptyCards(v.cache, isEmpty))
+
+				isEmpty = true
 			}
-			g.Go(func() error {
-				return WriteTimeout(time.Second*5, plr.Conn, EmptyCards(v.cache, isEmpty))
-			})
-			isEmpty = true
 		}
-	}
-
-	c.AllUsers.Mtx.RUnlock()
-	if err := g.Wait(); err != nil {
+		c.AllUsers.Mtx.RUnlock()
+		return
+	}()
+	if err != nil {
 		return
 	}
+
 	ctrl := Ctrl{}
 	ctrl.Plr = plr
 	for { // listening for actions
@@ -96,7 +98,7 @@ func (c *Lobby) HandleConn(plr *PlayUnit) {
 		c.lastResponse = time.Now()
 		plr.IsAway = false
 		if ctrl.CtrlInt == 0 && len(ctrl.CtrlString) != 0 {
-			c.BroadcastBytes([]byte(`{"Message":"` + ctrl.CtrlString + `","Name":"` + plr.Name + `"}`))
+			go c.BroadcastBytes([]byte(`{"Message":"` + ctrl.CtrlString + `","Name":"` + plr.Name + `"}`))
 			continue
 		}
 		c.PlayerCh <- ctrl
@@ -118,7 +120,7 @@ func (l *Lobby) BroadcastPlayer(plr *PlayUnit, IsExposed bool) {
 		} else {
 			isEmpty = true
 		}
-		go WriteTimeout(time.Second*5, val.Conn, EmptyCards(plr.cache, isEmpty))
+		defer WriteTimeout(time.Second*5, val.Conn, EmptyCards(plr.cache, isEmpty))
 
 	}
 	l.AllUsers.Mtx.RUnlock()
@@ -132,7 +134,7 @@ func (l *Lobby) BroadcastBoard(brd *GameBoard) {
 
 	l.AllUsers.Mtx.RLock()
 	for _, val := range l.AllUsers.M {
-		go WriteTimeout(time.Second*5, val.Conn, brd.cache)
+		defer WriteTimeout(time.Second*5, val.Conn, brd.cache)
 	}
 	l.AllUsers.Mtx.RUnlock()
 
@@ -140,7 +142,7 @@ func (l *Lobby) BroadcastBoard(brd *GameBoard) {
 func (l *Lobby) BroadcastBytes(b []byte) {
 	l.AllUsers.Mtx.RLock()
 	for _, val := range l.AllUsers.M {
-		go WriteTimeout(time.Second*5, val.Conn, b)
+		defer WriteTimeout(time.Second*5, val.Conn, b)
 	}
 	l.AllUsers.Mtx.RUnlock()
 }

@@ -147,6 +147,7 @@ func (g *Game) Game() {
 							if vabanks { // if everyone goes "all in" and river has not yet arrived
 								stages = postriver
 								copy(g.Board.Cards, g.Board.HiddenCards)
+								g.Board.Deadline = 0
 								g.BroadcastBoard(&g.Board)
 							}
 							switch stages {
@@ -207,13 +208,15 @@ func (g *Game) DealNewHand() {
 	g.Deck.Shuffle()
 
 	g.Board.Cards = g.Board.Cards[:0]
-	g.Deck.Draw(g.Board.cards[2:], g.Board.HiddenCards)
+
+	g.Deck.Draw(g.Board.cards[2:], g.Board.HiddenCards) // fill hidden cards
 	for _, v := range g.Players {
-		g.Deck.Draw(v.CardsEval, v.Cards[1:])
+		g.Deck.Draw(v.CardsEval, v.Cards[1:]) // fill players cards
 		v.IsFold = false
 		v.HasActed = false
 	}
-	g.Board.DealerPlace = g.PlayersRing.NextDealer(g.Board.DealerPlace, 1)
+	g.Board.DealerPlace = g.PlayersRing.NextDealer(g.Board.DealerPlace, 1) // evaluate next dealer place
+
 	if g.BlindRaise { // blind raise
 		g.Blindlvl++
 		if len(stackShare) > g.Blindlvl {
@@ -231,13 +234,13 @@ func (g *Game) DealNewHand() {
 	g.pl = g.PlayersRing.Next(1)
 	//send all current players to all users in room
 	for _, pl := range g.Players {
-		g.BroadcastPlayer(pl, false)
+		go g.BroadcastPlayer(pl, false)
 	}
 }
 
 func (g *Game) CalcWinners() {
 	g.topPlaces = g.topPlaces[:0]
-	for i, v := range g.Players {
+	for i, v := range g.Players { // evaluate players cards and rank them
 		if !v.IsFold && !v.IsAway {
 			g.Board.cards[0] = v.CardsEval[0]
 			g.Board.cards[1] = v.CardsEval[1]
@@ -255,14 +258,12 @@ func (g *Game) CalcWinners() {
 	for ; j == 0 || g.topPlaces[j].rating == g.topPlaces[j-1].rating; j++ {
 	}
 	share := g.Board.Bank / j
-	for i := range j {
+
+	for i := range j { // distribute the pot
 		pl := g.Players[g.topPlaces[i].place]
 		pl.Bank += share
+		go g.BroadcastPlayer(pl, true)
 	}
-	for i := range j {
-		pl := g.Players[g.topPlaces[i].place]
-		g.BroadcastPlayer(pl, true)
-	}
-	g.Board.Bank = 0
+	g.Board.Bank = 0 // reset the board bank
 	time.Sleep(time.Second * 5)
 }

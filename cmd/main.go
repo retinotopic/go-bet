@@ -2,12 +2,13 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"os"
 	"time"
+
+	json "github.com/bytedance/sonic"
 
 	"github.com/retinotopic/go-bet/internal/queue"
 	"github.com/retinotopic/go-bet/internal/router"

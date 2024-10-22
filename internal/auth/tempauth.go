@@ -24,19 +24,22 @@ func WriteCookie(w http.ResponseWriter) *http.Cookie {
 	http.SetCookie(w, cookie)
 	return cookie
 }
-func ReadCookie(r *http.Request) (string, error) {
-	c, err := r.Cookie("guest")
-	if err != nil {
-		return "", err
+func ReadCookie(r *http.Request, c *http.Cookie) (string, error) {
+	if c == nil {
+		var err error
+		c, err = r.Cookie("guest")
+		if err != nil {
+			return "", err
+		}
 	}
 	valueHash := c.Value
-	signature := valueHash[36:]
-	value := valueHash[:36]
+	signature := valueHash[22:]
+	value := valueHash[:22]
 	mac := hmac.New(sha256.New, secret)
 	mac.Write([]byte(value))
 	expectedSignature := base64.StdEncoding.EncodeToString(mac.Sum(nil))
 	if !hmac.Equal([]byte(signature), []byte(expectedSignature)) {
 		return "", errors.New("ValidationErr")
 	}
-	return c.Name[5:], nil
+	return value, nil
 }
