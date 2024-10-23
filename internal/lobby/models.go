@@ -45,6 +45,8 @@ type GameBoard struct {
 	DealerPlace int            `json:"DealerPlace"`
 	Deadline    int64          `json:"Deadline"`
 	Blind       int            `json:"Blind"`
+	Active      bool           `json:"Active"`
+	IsRating    bool           `json:"IsRating"`
 	cache       []byte         `json:"-"`
 	cards       poker.CardList `json:"-"`
 	HiddenCards []string       `json:"-"`

@@ -78,7 +78,6 @@ func (g *Game) Game() {
 
 			g.Board.Blind = g.Board.Bank * int(stackShare[g.Blindlvl]) // initial blind
 			g.InitialPlayerBank = g.Board.Bank
-			g.Board.Bank = 0
 
 			g.stop = make(chan bool, 1)
 			if g.Seats != [8]Seats{} { // if the game is in ranked mode, shuffle seats for randomness
@@ -90,7 +89,7 @@ func (g *Game) Game() {
 					v.Place = int(g.Seats[i].place)
 				}
 			}
-
+			g.Board.Bank = 0
 			g.DealNewHand()
 			g.TurnTimer = time.NewTimer(time.Second * 10)
 			g.BlindTimer = time.NewTimer(time.Duration(g.Board.Deadline) * time.Minute)

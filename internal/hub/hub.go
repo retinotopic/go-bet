@@ -13,22 +13,26 @@ import (
 )
 
 func NewPump(lenBuffer int, queue lobby.Queue) *HubPump {
-	lm := csmap.Create[uint64, *lobby.Lobby]( // URL to room
-		csmap.WithShardCount[uint64, *lobby.Lobby](128),
-		csmap.WithSize[uint64, *lobby.Lobby](1000),
+	lm := csmap.Create( // URL to room
+		csmap.WithShardCount[uint64, *lobby.Lobby](1000),
+		csmap.WithSize[uint64, *lobby.Lobby](128),
 	)
-	plm := csmap.Create[string, string]( // user_id to room URL
-		csmap.WithShardCount[string, string](128),
-		csmap.WithSize[string, string](1000),
+	plm := csmap.Create( // user_id to room URL
+		csmap.WithShardCount[string, string](1000),
+		csmap.WithSize[string, string](128),
 	)
 	hub := &HubPump{reqPlayers: make(chan *lobby.PlayUnit, lenBuffer), lobby: lm, players: plm}
 	hub.requests()
 	return hub
 }
 
+type Databaser interface {
+	GetRatings(user_id string) ([]byte, error)
+}
 type HubPump struct {
-	lobby      *csmap.CsMap[uint64, *lobby.Lobby]
-	players    *csmap.CsMap[string, string]
+	db         Databaser
+	lobby      *csmap.CsMap[uint64, *lobby.Lobby] // URL to room
+	players    *csmap.CsMap[string, string]       // user_id to room URL
 	reqPlayers chan *lobby.PlayUnit
 }
 
@@ -88,6 +92,7 @@ func (h *HubPump) startRatingGame(plrs []*lobby.PlayUnit) {
 				previousFound = true
 				isSet = true
 				go lb.LobbyStart(gm)
+				go rtng.Validate(lobby.Ctrl{CtrlInt: 3})
 			} else {
 				previousFound = false
 			}

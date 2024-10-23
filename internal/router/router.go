@@ -48,7 +48,7 @@ func (r *Router) Run() error {
 	consumer := &queue.Consumer{Addr: r.AddrQueue, Ex: r.ConfigQueue.Exchange, RoutingKey: r.RoutingKey}
 	consumer.TryConnect()
 
-	middleware := middleware.UserMiddleware{GetUser: db.GetUser, GetProvider: r.Auth.GetProvider, WriteCookie: auth.WriteCookie, ReadCookie: auth.ReadCookie}
+	middleware := middleware.UserMiddleware{GetUser: db.GetUser, GetSubject: r.Auth.GetSubject, WriteCookie: auth.WriteCookie, ReadCookie: auth.ReadCookie}
 	hConnectLobby := http.HandlerFunc(hub.ConnectLobby)
 	hFindGame := http.HandlerFunc(hub.FindGame)
 

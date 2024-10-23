@@ -5,6 +5,8 @@ import (
 	"errors"
 	"strings"
 
+	json "github.com/bytedance/sonic"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -31,8 +33,12 @@ func (p *Pool) NewUser(ctx context.Context, sub, username string) error {
 	return err
 }
 
-func (p *Pool) GetRatings(user_id string) (pgx.Rows, error) {
+type Ratings struct {
+	Username string `json:"username"`
+	Rating   int    `json:"rating"`
+}
 
+func (p *Pool) GetRatings(user_id string) ([]byte, error) {
 	rows, err := p.Pool.Query(context.Background(), `WITH common_query AS (
     	SELECT users.name, ratings.rating 
     	FROM ratings 
@@ -40,7 +46,16 @@ func (p *Pool) GetRatings(user_id string) (pgx.Rows, error) {
 		SELECT * FROM common_query WHERE ratings.user_id = $1
 		UNION ALL
 		SELECT * FROM common_query ORDER BY rating DESC LIMIT 100;`, user_id)
-	return rows, err
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	ratings, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[Ratings])
+	if err != nil {
+		return nil, err
+	}
+	b, err := json.Marshal(ratings)
+	return b, err
 }
 func (p *Pool) ChangeRating(user_id int, rating int) error {
 	_, err := p.Pool.Exec(context.Background(), `INSERT INTO ratings (user_id, rating) VALUES ($1,$2) 

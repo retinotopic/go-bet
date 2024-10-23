@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/golang-jwt/jwt"
 	"github.com/retinotopic/tinyauth/provider"
@@ -52,4 +53,34 @@ func (pm *ProviderMap) CompleteAuth(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
 	prvdr.CompleteAuth(w, r)
+}
+func (pm *ProviderMap) Logout(w http.ResponseWriter, r *http.Request) {
+	c1 := &http.Cookie{
+		Name:    "token",
+		Value:   "",
+		Path:    "/",
+		Expires: time.Unix(0, 0),
+
+		HttpOnly: true,
+		Secure:   true,
+	}
+	c2 := &http.Cookie{
+		Name:    "refresh_token",
+		Value:   "",
+		Path:    "/",
+		Expires: time.Unix(0, 0),
+
+		HttpOnly: true,
+		Secure:   true,
+	}
+	http.SetCookie(w, c1)
+	http.SetCookie(w, c2)
+}
+func (pm *ProviderMap) GetSubject(w http.ResponseWriter, r *http.Request) (string, error) {
+	prvdr, err := pm.GetProvider(w, r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return "", err
+	}
+	return prvdr.FetchUser(w, r)
 }

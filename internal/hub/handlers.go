@@ -12,6 +12,19 @@ import (
 	"github.com/retinotopic/go-bet/internal/middleware"
 )
 
+func (h *HubPump) GetInitialData(w http.ResponseWriter, r *http.Request) {
+	user_id, _ := middleware.GetUser(r.Context())
+	if !isNumeric(user_id) {
+		http.Error(w, "user not found", http.StatusUnauthorized)
+		return
+	}
+	b, err := h.db.GetRatings(user_id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write(b)
+}
 func (h *HubPump) FindGame(w http.ResponseWriter, r *http.Request) {
 	user_id, name := middleware.GetUser(r.Context())
 	if !isNumeric(user_id) {
@@ -30,6 +43,7 @@ func (h *HubPump) FindGame(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.reqPlayers <- &lobby.PlayUnit{User_id: user_id, Name: name, Conn: conn, Cards: make([]string, 0, 3), CardsEval: make([]poker.Card, 0, 2)}
+
 	}
 
 }
@@ -51,6 +65,10 @@ func (h *HubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 		if ok {
 			plr = pl
 		} else {
+			if len(lb.AllUsers.M) >= 15 {
+				http.Error(w, "room is full", http.StatusBadRequest)
+				return
+			}
 			plr = &lobby.PlayUnit{User_id: user_id, Name: name, Place: -2, Cards: make([]string, 0, 3), CardsEval: make([]poker.Card, 0, 2)}
 			lb.AllUsers.M[user_id] = plr
 		}
