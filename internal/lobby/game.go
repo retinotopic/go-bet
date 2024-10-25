@@ -258,7 +258,7 @@ func (g *Game) CalcWinners() {
 	}
 	share := g.Board.Bank / j
 
-	for i := range j { // distribute the pot
+	for i := range j { // distribute the pot between winners
 		pl := g.Players[g.topPlaces[i].place]
 		pl.Bank += share
 		go g.BroadcastPlayer(pl, true)

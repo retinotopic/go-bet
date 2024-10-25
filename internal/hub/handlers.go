@@ -4,6 +4,7 @@ import (
 	"hash/maphash"
 	"net/http"
 	"strconv"
+	"time"
 	"unicode"
 
 	"github.com/Nerdmaster/poker"
@@ -12,42 +13,41 @@ import (
 	"github.com/retinotopic/go-bet/internal/middleware"
 )
 
-func (h *HubPump) GetInitialData(w http.ResponseWriter, r *http.Request) {
+func (h *Hub) GetInitialData(w http.ResponseWriter, r *http.Request) {
 	user_id, _ := middleware.GetUser(r.Context())
 	if !isNumeric(user_id) {
 		http.Error(w, "user not found", http.StatusUnauthorized)
 		return
 	}
-	b, err := h.db.GetRatings(user_id)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+
+	if time.Since(h.lastRatingsUpdate) > time.Duration(time.Hour*6) { // update top 100 players every 6 hours
+		var err error
+		h.ratingsCache, err = h.db.GetRatings(user_id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
-	w.Write(b)
+	w.Write(h.ratingsCache)
 }
-func (h *HubPump) FindGame(w http.ResponseWriter, r *http.Request) {
-	user_id, name := middleware.GetUser(r.Context())
+func (h *Hub) FindGame(w http.ResponseWriter, r *http.Request) {
+	user_id, _ := middleware.GetUser(r.Context())
 	if !isNumeric(user_id) {
 		http.Error(w, "user not found", http.StatusUnauthorized)
 		return
 	}
-
-	url, ok := h.players.Load(user_id)
-
-	if ok && len(url) != 0 {
-		w.Write([]byte(`{"URL":"` + url + `"}`))
-	} else {
-		conn, err := websocket.Accept(w, r, nil)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		h.reqPlayers <- &lobby.PlayUnit{User_id: user_id, Name: name, Conn: conn, Cards: make([]string, 0, 3), CardsEval: make([]poker.Card, 0, 2)}
-
+	conn, err := websocket.Accept(w, r, nil)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	plr, ok := h.players.Load(user_id)
+	if ok && len(plr.URL) != 0 {
+		WriteTimeout(time.Second*5, conn, []byte(`{"URL":"`+plr.URL+`"}`))
 	}
 
 }
-func (h *HubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
+func (h *Hub) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 	//check for player presence in map
 	user_id, name := middleware.GetUser(r.Context())
 
@@ -83,7 +83,7 @@ func (h *HubPump) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 		go lb.HandleConn(plr)
 	}
 }
-func (h *HubPump) CreateLobby(w http.ResponseWriter, r *http.Request) {
+func (h *Hub) CreateLobby(w http.ResponseWriter, r *http.Request) {
 	user_id, name := middleware.GetUser(r.Context())
 
 	lb := &lobby.Lobby{}
