@@ -60,10 +60,10 @@ func (g *Game) Game() {
 
 	var buf [32]byte
 	bufs := make([]byte, 32)
-	crand.Read(bufs)
+	crand.Read(bufs) // generating cryptographically random slice of bytes
 	copy(buf[:], bufs)
-	rand := mrand.New(mrand.NewChaCha8(buf))
-	g.Deck = NewDeck(rand)
+	rand := mrand.New(mrand.NewChaCha8(buf)) //  and using it as a ChaCha8 seed
+	g.Deck = NewDeck(rand)                   // and using it as a source for mrand
 
 	g.topPlaces = make([]top, 0, 8)     //---\
 	g.winners = make([]*PlayUnit, 0, 8) //	  >----- reusable memory for post-river evaluation

@@ -76,6 +76,7 @@ func (h *Hub) requests() {
 			if required-c == required {
 				h.startRatingGame(plrs)
 				plrs = plrs[:0]
+				required = 8
 				timer.Reset(time.Minute * 5)
 			}
 		}

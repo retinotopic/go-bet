@@ -48,6 +48,7 @@ func (r *RatingImpl) PlayerOut(plr []*PlayUnit, place int) {
 		}
 		plr[i].Place = -2
 		defer plr[i].StoreCache()
+
 		go WriteTimeout(time.Second*5, plr[i].Conn, placemsg)
 
 	}
