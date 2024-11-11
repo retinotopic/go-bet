@@ -13,22 +13,22 @@ import (
 	"github.com/retinotopic/go-bet/internal/middleware"
 )
 
-func (h *Hub) GetInitialData(w http.ResponseWriter, r *http.Request) {
-	user_id, _ := middleware.GetUser(r.Context())
-	if !isNumeric(user_id) {
-		http.Error(w, "user not found", http.StatusUnauthorized)
-		return
-	}
+func (h *Hub) GetInitialData(user_id string, conn *websocket.Conn) (err error) {
 
-	if time.Since(h.lastRatingsUpdate) > time.Duration(time.Hour*6) { // update top 100 players every 6 hours
+	if time.Since(h.lastRatingsUpdate) > time.Duration(time.Minute*30) { // update top 100 players every 30 minutes
 		var err error
 		h.ratingsCache, err = h.db.GetRatings(user_id)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			conn.Close(websocket.StatusInternalError, "db fetch ratings error")
+			return err
+		}
+		err = WriteTimeout(time.Second*5, conn, h.ratingsCache)
+		if err != nil {
+			conn.CloseNow()
+			return err
 		}
 	}
-	w.Write(h.ratingsCache)
+	return err
 }
 func (h *Hub) FindGame(w http.ResponseWriter, r *http.Request) {
 	user_id, _ := middleware.GetUser(r.Context())
@@ -39,6 +39,10 @@ func (h *Hub) FindGame(w http.ResponseWriter, r *http.Request) {
 	conn, err := websocket.Accept(w, r, nil)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	err = h.GetInitialData(user_id, conn)
+	if err != nil {
 		return
 	}
 	plr, ok := h.players.Load(user_id)
