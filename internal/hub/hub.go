@@ -37,6 +37,7 @@ type awaitingPlayer struct {
 	Queued  bool   `json:"-"`
 	QueueId int    `json:"-"`
 	URL     string `json:"URL"`
+	Conn    *websocket.Conn
 }
 type Hub struct {
 	db                Databaser
@@ -50,7 +51,7 @@ type Hub struct {
 }
 
 func (h *Hub) requests() {
-	plrs := make([]*awaitingPlayer, 0, 8)
+	plrs := make([]*awaitingPlayer, 8)
 	h.stackids = []int{8, 7, 6, 5, 4, 3, 2, 1}
 	timer := time.NewTimer(time.Minute * 5)
 	required := 8 //required players to start the game
@@ -68,15 +69,24 @@ func (h *Hub) requests() {
 
 		c := 0
 		for i := range plrs {
-			if !plrs[i].Queued { //if the player has canceled the game search
-				h.stackids = append(h.stackids, plrs[i].QueueId) // back to the pool of free stack indices
-				h.ActivityCounter--
-				c++
+			if plrs[i] != nil {
+				if !plrs[i].Queued { //if the player has canceled the game search
+					WriteTimeout(time.Second*5, plrs[i].Conn, []byte(`{"counter":"`+"-1"+`"}`))
+					h.stackids = append(h.stackids, plrs[i].QueueId) // back to the pool of free stack indices
+					plrs[i] = nil
+					h.ActivityCounter--
+					c++
+				} else if len(plrs[i].URL) != 0 { //if the game is found
+					WriteTimeout(time.Second*5, plrs[i].Conn, []byte(`{"URL":"`+plrs[i].URL+`"}`))
+				} else if plrs[i].Counter != h.ActivityCounter { // update current players who are queued up
+					plrs[i].Counter = h.ActivityCounter
+					WriteTimeout(time.Second*5, plrs[i].Conn, []byte(`{"counter":"`+strconv.Itoa(plrs[i].Counter)+`"}`))
+				}
 			}
 		}
 		if len(plrs)-c == required {
 			h.startRatingGame(plrs)
-			plrs = plrs[:0]
+			clear(plrs)
 			required = 8
 			timer.Reset(time.Minute * 5)
 		}
@@ -98,10 +108,12 @@ func (h *Hub) startRatingGame(plrs []*awaitingPlayer) {
 				url := strconv.FormatUint(hash, 10)
 				//urlb := []byte(`{"URL":"` + url + `"}`)
 				for _, plr := range plrs {
-					p := &lobby.PlayUnit{User_id: plr.User_id, Name: plr.Name, Cards: make([]string, 0, 3), CardsEval: make([]poker.Card, 0, 2)}
-					lb.AllUsers.M[plr.User_id] = p
-					plr.URL = url
-					p.Place = 0
+					if plr != nil {
+						p := &lobby.PlayUnit{User_id: plr.User_id, Name: plr.Name, Cards: make([]string, 0, 3), CardsEval: make([]poker.Card, 0, 2)}
+						lb.AllUsers.M[plr.User_id] = p
+						plr.URL = url
+						p.Place = 0
+					}
 				}
 				previousVale = lb
 				previousFound = true
