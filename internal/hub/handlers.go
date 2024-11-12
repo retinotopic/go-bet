@@ -22,6 +22,7 @@ func (h *Hub) GetInitialData(user_id string, conn *websocket.Conn) (err error) {
 			conn.Close(websocket.StatusInternalError, "db fetch ratings error")
 			return err
 		}
+		h.lastRatingsUpdate = time.Now()
 		err = WriteTimeout(time.Second*5, conn, h.ratingsCache)
 		if err != nil {
 			conn.CloseNow()
@@ -31,7 +32,7 @@ func (h *Hub) GetInitialData(user_id string, conn *websocket.Conn) (err error) {
 	return err
 }
 func (h *Hub) FindGame(w http.ResponseWriter, r *http.Request) {
-	user_id, _ := middleware.GetUser(r.Context())
+	user_id, username := middleware.GetUser(r.Context())
 	if !isNumeric(user_id) {
 		http.Error(w, "user not found", http.StatusUnauthorized)
 		return
@@ -47,9 +48,49 @@ func (h *Hub) FindGame(w http.ResponseWriter, r *http.Request) {
 	}
 	plr, ok := h.players.Load(user_id)
 	if ok && len(plr.URL) != 0 {
-		WriteTimeout(time.Second*5, conn, []byte(`{"URL":"`+plr.URL+`"}`))
-	}
+		err = WriteTimeout(time.Second*5, conn, []byte(`{"URL":"`+plr.URL+`"}`))
+		if err != nil {
+			conn.CloseNow()
+		}
+	} else {
+		plr := &awaitingPlayer{User_id: user_id, Name: username}
+		firstHandshake := time.Now()
+		decided := false
+		defer func() {
+			plr.Queued = false
+		}()
+		for {
+			b, _ := ReadTimeout(time.Second*5, conn)
 
+			if string(b) == "active" {
+				plr.Queued = true
+				plr.Counter = h.ActivityCounter
+				h.reqPlayers <- plr
+				decided = true
+			} else if string(b) == "inactive" {
+				plr.Queued = false
+			}
+			if !decided && time.Since(firstHandshake) > time.Duration(time.Minute*5) {
+				conn.CloseNow()
+				return
+			}
+			if len(plr.URL) != 0 {
+				err = WriteTimeout(time.Second*5, conn, []byte(`{"URL":"`+plr.URL+`"}`))
+				if err == nil {
+					return
+				}
+			} else if !plr.Queued {
+				err = WriteTimeout(time.Second*5, conn, []byte(`{"counter":"`+"-1"+`"}`))
+			} else if plr.Queued && plr.Counter != h.ActivityCounter {
+				plr.Counter = h.ActivityCounter
+				err = WriteTimeout(time.Second*5, conn, []byte(`{"counter":"`+strconv.Itoa(plr.Counter)+`"}`))
+			}
+			if err != nil {
+				conn.CloseNow()
+				return
+			}
+		}
+	}
 }
 func (h *Hub) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 	//check for player presence in map

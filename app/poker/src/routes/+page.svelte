@@ -10,7 +10,6 @@
     let ratings = $state<Ratings[]>([]);
     let gameState = $state< 'find' | 'waiting' | 'ready' >('find');
     let counter = $state(0);
-    let queueId = $state(0);
     let gameUrl = $state('');
 	onMount(() => {
         connectWebSocket();
@@ -22,7 +21,7 @@
     function connectWebSocket() {
         socket = new WebSocket('ws://localhost:8080/hub');
         ConnState = 'loading'
-        socket.onclose = () => {
+        socket.onerror = () => {
             ConnState = 'connerror';
         };
 
@@ -48,10 +47,7 @@
 			if (data.url){
 				gameUrl = data.url
 			}
-			num = parseInt(data.queue_id, 10)
-			if (num){
-				queueId = num
-			}
+
 			num = parseInt(data.counter, 10)
 			if (num){
 				counter = num
@@ -61,8 +57,8 @@
 			if (gameUrl) {
 				gameState = 'ready';
                 counter = 0
-                queueId = 0
-			} else if (queueId === 0) {
+                socket.close()
+			} else if (counter === -1) {
 				gameState = 'find';
 			} else {
 				gameState = 'waiting';

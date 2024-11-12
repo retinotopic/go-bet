@@ -31,12 +31,12 @@ type Databaser interface {
 	GetRatings(user_id string) ([]byte, error)
 }
 type awaitingPlayer struct {
-	User_id string `json:"user_id"`
-	Name    string `json:"name"`
-	Counter *int   `json:"counter"` // pointer to ActivityCounter
-	Queued  bool
-	QueueId int    `json:"queue_id"`
-	URL     string `json:"url"`
+	User_id string `json:"-"`
+	Name    string `json:"-"`
+	Counter int    `json:"counter"` // represents ActivityCounter
+	Queued  bool   `json:"-"`
+	QueueId int    `json:"-"`
+	URL     string `json:"URL"`
 }
 type Hub struct {
 	db                Databaser
@@ -60,25 +60,25 @@ func (h *Hub) requests() {
 			last := len(h.stackids) - 1
 			plr.QueueId = h.stackids[last]
 			h.stackids = h.stackids[:last]
-			plr.Counter = &h.ActivityCounter
+			plr.Counter = h.ActivityCounter
 			plrs[plr.QueueId] = plr
 		case <-timer.C:
 			required = 4
 		}
-		if len(plrs) == required {
-			c := 0
-			for i := range plrs {
-				if !plrs[i].Queued { //if the player has canceled the game search
-					h.stackids = append(h.stackids, plrs[i].QueueId) // back to the pool of free stack indices
-					c++
-				}
+
+		c := 0
+		for i := range plrs {
+			if !plrs[i].Queued { //if the player has canceled the game search
+				h.stackids = append(h.stackids, plrs[i].QueueId) // back to the pool of free stack indices
+				h.ActivityCounter--
+				c++
 			}
-			if required-c == required {
-				h.startRatingGame(plrs)
-				plrs = plrs[:0]
-				required = 8
-				timer.Reset(time.Minute * 5)
-			}
+		}
+		if len(plrs)-c == required {
+			h.startRatingGame(plrs)
+			plrs = plrs[:0]
+			required = 8
+			timer.Reset(time.Minute * 5)
 		}
 
 	}
@@ -126,4 +126,11 @@ func WriteTimeout(timeout time.Duration, c *websocket.Conn, msg []byte) error {
 	defer cancel()
 
 	return c.Write(ctx, websocket.MessageText, msg)
+}
+func ReadTimeout(timeout time.Duration, c *websocket.Conn) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	_, b, err := c.Read(ctx)
+	return b, err
 }
