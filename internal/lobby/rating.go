@@ -17,8 +17,8 @@ type Queue interface {
 }
 
 func (r *RatingImpl) Validate(ctrl Ctrl) {
-	timer := time.NewTimer(time.Minute * time.Duration(ctrl.CtrlInt)) //pre-set timer
-	r.Board.Deadline = time.Now().Add(time.Minute * time.Duration(ctrl.CtrlInt)).Unix()
+	timer := time.NewTimer(time.Minute * time.Duration(ctrl.Ctrl)) //pre-set timer
+	r.Board.Deadline = time.Now().Add(time.Minute * time.Duration(ctrl.Ctrl)).Unix()
 	r.Board.Bank = 1000
 	for i := range 8 {
 		r.Seats[i].place = uint8(i)

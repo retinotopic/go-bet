@@ -7,8 +7,8 @@ import Hand from '../../components/hand.svelte';
 
 interface Ctrl {
 	Place     : number      
-	CtrlInt  :  number     
-	CtrlString :string   
+	Ctrl  :  number     
+	Text :string   
 }
 interface GameBoard {
 	Cards:       string[] 

@@ -97,8 +97,8 @@ func (c *Lobby) HandleConn(plr *PlayUnit) {
 		}
 		c.lastResponse = time.Now()
 		plr.IsAway = false
-		if ctrl.CtrlInt == 0 && len(ctrl.CtrlString) != 0 {
-			go c.BroadcastBytes([]byte(`{"Message":"` + ctrl.CtrlString + `","Name":"` + plr.Name + `"}`))
+		if ctrl.Ctrl == 0 && len(ctrl.Text) != 0 {
+			go c.BroadcastBytes([]byte(`{"Message":"` + ctrl.Text + `","Name":"` + plr.Name + `"}`))
 			continue
 		}
 		c.PlayerCh <- ctrl

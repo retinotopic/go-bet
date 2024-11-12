@@ -7,10 +7,10 @@ import (
 )
 
 type Ctrl struct {
-	Place      int       `json:"Place"`
-	CtrlInt    int       `json:"CtrlInt"`
-	CtrlString string    `json:"CtrlString"`
-	Plr        *PlayUnit `json:"-"`
+	Place int       `json:"Place"`
+	Ctrl  int       `json:"Ctrl"`
+	Text  string    `json:"Text"`
+	Plr   *PlayUnit `json:"-"`
 }
 
 type PlayUnit struct {

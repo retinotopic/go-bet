@@ -24,9 +24,9 @@ func (c *CustomImpl) Validate(ctrl Ctrl) {
 		if ctrl.Place == -1 {
 
 			c.HasBegun = true
-			c.Board.Bank = ctrl.CtrlInt
-			sec, err := strconv.ParseInt(ctrl.CtrlString, 10, 0)
-			if err != nil && (sec > 3600 || sec < 0) && (ctrl.CtrlInt > 10000000 || ctrl.CtrlInt < 0) {
+			c.Board.Bank = ctrl.Ctrl
+			sec, err := strconv.ParseInt(ctrl.Text, 10, 0)
+			if err != nil && (sec > 3600 || sec < 0) && (ctrl.Ctrl > 10000000 || ctrl.Ctrl < 0) {
 				return
 			}
 			c.Board.Deadline = sec
@@ -47,12 +47,12 @@ func (c *CustomImpl) Validate(ctrl Ctrl) {
 			c.AllUsers.Mtx.RUnlock()
 			c.Seats = [8]Seats{} // to assert that game is custom
 			c.StartGameCh <- true
-		} else if ctrl.CtrlInt < len(ctrl.CtrlString) { // admin approves player at the table
+		} else if ctrl.Ctrl < len(ctrl.Text) { // admin approves player at the table
 			c.AllUsers.Mtx.RLock()
-			pl, ok := c.AllUsers.M[ctrl.CtrlString[:ctrl.CtrlInt]]
+			pl, ok := c.AllUsers.M[ctrl.Text[:ctrl.Ctrl]]
 			// is user exist && if place index isnt out of range && if place is not occupied
 			if ok && ctrl.Place >= 0 && ctrl.Place <= 7 && !c.Seats[ctrl.Place].isOccupied {
-				name := ctrl.CtrlString[ctrl.CtrlInt:]
+				name := ctrl.Text[ctrl.Ctrl:]
 				if isAlphanumeric(name) {
 					pl.Name = name
 					c.Seats[ctrl.Place].isOccupied = true

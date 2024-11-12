@@ -119,11 +119,13 @@ func (h *Hub) startRatingGame(plrs []*awaitingPlayer) {
 				previousFound = true
 				isSet = true
 				go func() {
-					rtng.Validate(lobby.Ctrl{CtrlInt: 3})
-					rtng.LobbyStart(gm)
 					for _, plr := range plrs {
-						h.players.Delete(plr.User_id)
+						if plr != nil {
+							defer h.players.Delete(plr.User_id)
+						}
 					}
+					rtng.Validate(lobby.Ctrl{Ctrl: 3})
+					rtng.LobbyStart(gm)
 				}()
 			} else {
 				previousFound = false

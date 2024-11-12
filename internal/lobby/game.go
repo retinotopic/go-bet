@@ -105,17 +105,17 @@ func (g *Game) Game() {
 						g.TurnTimer.Stop()
 						now = time.Now().Unix()
 						g.pl = ctrl.Plr
-						if ctrl.CtrlInt > g.pl.Bank || ctrl.CtrlInt < 0 { // if a player tries to cheat the system or just wants to quit, then we zero his bank
+						if ctrl.Ctrl > g.pl.Bank || ctrl.Ctrl < 0 { // if a player tries to cheat the system or just wants to quit, then we zero his bank
 							g.pl.Bank = 0
 							g.pl.Bet = 0
-							ctrl.CtrlInt = 0
+							ctrl.Ctrl = 0
 						}
 
-						if g.pl.Bet+ctrl.CtrlInt >= g.MaxBet {
+						if g.pl.Bet+ctrl.Ctrl >= g.MaxBet {
 							g.MaxBet = g.pl.Bet
 							g.pl.IsAway = false
-							g.pl.Bet = g.pl.Bet + ctrl.CtrlInt
-							g.pl.Bank -= ctrl.CtrlInt
+							g.pl.Bet = g.pl.Bet + ctrl.Ctrl
+							g.pl.Bank -= ctrl.Ctrl
 						} else {
 							g.pl.IsFold = true
 						}
