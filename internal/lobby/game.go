@@ -97,7 +97,7 @@ func (g *Game) Game() {
 			defer func() { // prevent goroutine leakage
 				g.stop <- true
 			}()
-			for GAME_LOOP := true; GAME_LOOP; {
+			for GAME_LOOP := true; GAME_LOOP; { // MAIN GAME LOOP START
 				select {
 				case ctrl, ok := <-g.PlayerCh:
 					if ok && ctrl.Plr == g.pl {
@@ -171,7 +171,7 @@ func (g *Game) Game() {
 				case <-g.Shutdown:
 					return
 				}
-			}
+			} // MAIN GAME LOOP END
 		case ctrl := <-g.PlayerCh: // pre-game board tuning
 			g.Impl.Validate(ctrl)
 		case <-g.Shutdown:

@@ -83,10 +83,9 @@ func (c *Lobby) HandleConn(plr *PlayUnit) {
 	if err != nil {
 		return
 	}
-
-	ctrl := Ctrl{}
-	ctrl.Plr = plr
 	for { // listening for actions
+		ctrl := Ctrl{}
+		ctrl.Plr = plr
 		_, data, err := plr.Conn.Read(context.TODO())
 		if err != nil {
 			break
