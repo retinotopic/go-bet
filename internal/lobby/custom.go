@@ -9,13 +9,7 @@ import (
 	json "github.com/bytedance/sonic"
 )
 
-type CustomImpl struct {
-	*Game
-	AdminOnce sync.Once
-	Admin     *PlayUnit
-}
-
-func (c *CustomImpl) Validate(ctrl Ctrl) {
+func (c *Lobby) ValidateCustom(ctrl Ctrl) {
 	c.AdminOnce.Do(func() {
 		c.Admin = ctrl.Plr
 	})
@@ -31,10 +25,10 @@ func (c *CustomImpl) Validate(ctrl Ctrl) {
 			}
 			c.Board.Deadline = sec
 			//at game start add occupied seats at the table to players
-			c.Players = make([]*PlayUnit, 0, 8)
-			c.AllUsers.Mtx.RLock()
+			c.Players = c.Players[:0]
+			c.MapUsers.Mtx.RLock()
 			i := 0
-			for _, pl := range c.AllUsers.M {
+			for _, pl := range c.MapUsers.M {
 				if i == 8 {
 					break
 				}
@@ -44,12 +38,12 @@ func (c *CustomImpl) Validate(ctrl Ctrl) {
 					i++
 				}
 			}
-			c.AllUsers.Mtx.RUnlock()
+			c.MapUsers.Mtx.RUnlock()
 			c.Seats = [8]Seats{} // to assert that game is custom
 			c.StartGameCh <- true
 		} else if ctrl.Ctrl < len(ctrl.Text) { // admin approves player at the table
-			c.AllUsers.Mtx.RLock()
-			pl, ok := c.AllUsers.M[ctrl.Text[:ctrl.Ctrl]]
+			c.MapUsers.Mtx.RLock()
+			pl, ok := c.MapUsers.M[ctrl.Text[:ctrl.Ctrl]]
 			// is user exist && if place index isnt out of range && if place is not occupied
 			if ok && ctrl.Place >= 0 && ctrl.Place <= 7 && !c.Seats[ctrl.Place].isOccupied {
 				name := ctrl.Text[ctrl.Ctrl:]
@@ -61,7 +55,7 @@ func (c *CustomImpl) Validate(ctrl Ctrl) {
 					c.BroadcastPlayer(ctrl.Plr, true)
 				}
 			}
-			c.AllUsers.Mtx.RUnlock()
+			c.MapUsers.Mtx.RUnlock()
 		}
 	} else if ctrl.Place >= 0 && ctrl.Place <= 7 {
 		//player's request to be at the table
@@ -71,19 +65,19 @@ func (c *CustomImpl) Validate(ctrl Ctrl) {
 		}
 		WriteTimeout(time.Second*5, c.Admin.Conn, b)
 	} else if ctrl.Place == -2 && ctrl.Plr.Place >= 0 { // player leaves
-		c.AllUsers.Mtx.RLock()
-		pl, ok := c.AllUsers.M[ctrl.Plr.User_id]
+		c.MapUsers.Mtx.RLock()
+		pl, ok := c.MapUsers.M[ctrl.Plr.User_id]
 		c.Seats[ctrl.Place].isOccupied = false
 		if ok {
 			pl.Place = ctrl.Place
 			pl.cache = pl.StoreCache()
 			c.BroadcastPlayer(ctrl.Plr, true)
 		}
-		c.AllUsers.Mtx.RUnlock()
+		c.MapUsers.Mtx.RUnlock()
 	}
 
 }
-func (r *CustomImpl) PlayerOut(plr []*PlayUnit, place int) {
+func (r *Lobby) PlayerOutCustom(plr []PlayUnit, place int) {
 	placemsg := []byte(`{"GameOverPlace":"` + strconv.Itoa(place) + `"}`)
 	for i := range plr {
 		plr[i].Place = -2

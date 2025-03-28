@@ -4,31 +4,19 @@ import (
 	"sync"
 )
 
-type MapUsers struct {
-	M   map[string]*PlayUnit // userId to user || player
-	Mtx sync.RWMutex
-}
-
-type PlayersRing struct {
-	Players  []*PlayUnit
-	AllUsers MapUsers
-	Idx      int
-	Board    GameBoard
-	Blindlvl int
-}
-
-func (rs *PlayersRing) Next(offset int) *PlayUnit {
-	pl := rs.Players[rs.Idx]
-	for pl.IsAway || pl.IsFold {
+func (rs *Lobby) Next(offset int) *PlayUnit {
+	pl := &rs.Players[rs.Idx]
+	for pl.IsAway || pl.IsFold || pl.IsAllIn {
 		rs.Idx = (rs.Idx + offset) % len(rs.Players)
-		pl = rs.Players[rs.Idx]
+		pl = &rs.Players[rs.Idx]
 	}
 	return pl
 }
-func (rs *PlayersRing) NextDealer(start, offset int) int {
+func (rs *Lobby) NextDealer(start, offset int) int {
 	rs.Idx = (start + offset) % len(rs.Players)
 	return rs.Idx
 }
+func (l *Lobby) NewUser()
 
 // small blind is calculated via: initial player stack * stackShare[i]
 var stackShare = []float32{

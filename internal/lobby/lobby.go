@@ -3,10 +3,10 @@ package lobby
 import (
 	"bytes"
 	"context"
-	"time"
-
 	json "github.com/bytedance/sonic"
 	"github.com/coder/websocket"
+	"sync"
+	"time"
 )
 
 const (
@@ -17,7 +17,7 @@ const (
 )
 
 type Lobby struct {
-	PlayersRing
+	// Lobby info
 	HasBegun     bool
 	PlayerCh     chan Ctrl
 	checkTimeout *time.Ticker
@@ -25,10 +25,56 @@ type Lobby struct {
 	ValidateCh   chan Ctrl
 	Shutdown     chan bool
 	Url          uint64
+	bytesbuf     [][]byte
+	MapUsers     mapUsers
+	AllUsers     []PlayUnit
+
+	// In process game info
+	InitialPlayerBank int
+	Seats             [8]Seats
+	topPlaces         []top
+
+	// indices of AllUsers slice elements
+	winners []int
+	losers  []int
+	Deck    Deck
+
+	// current player
+	pl          int
+	TurnTimer   *time.Timer
+	BlindTimer  *time.Timer
+	StartGameCh chan bool
+	stop        chan bool
+	BlindRaise  bool
+
+	Players  []int
+	Idx      int
+	Board    GameBoard
+	Blindlvl int
+
+	// method for handling board in no-ingame time
+	Validate func(Ctrl)
+
+	// method for handling kicked players
+	PlayerOut func([]PlayUnit, int)
+
+	//for custom lobbies
+	AdminOnce sync.Once
+	Admin     int
+
+	/*For rating lobbies, basically a queue,
+	for some minimal persistence writes on disk if
+	update not succeded */
+	UpdateRating func(int, int) // user id, rating
 }
 
-func (l *Lobby) LobbyStart(gm *Game) {
-	go gm.Game()
+type mapUsers struct {
+	M   map[string]int // userId to index in AllUsers slice
+	Mtx sync.RWMutex
+}
+
+func (l *Lobby) LobbyStart(gm *Lobby) {
+	go l.Game()
 	l.checkTimeout = time.NewTicker(time.Minute * 3)
 	l.Shutdown = make(chan bool, 10)
 	l.PlayerCh = make(chan Ctrl)
@@ -48,38 +94,11 @@ func (l *Lobby) LobbyStart(gm *Game) {
 	}
 }
 
-func (c *Lobby) HandleConn(plr *PlayUnit) {
-	defer func() {
-		if plr.Place == -2 {
-			c.AllUsers.Mtx.Lock()
-			delete(c.AllUsers.M, plr.User_id)
-			c.AllUsers.Mtx.Unlock()
-		}
-		plr.Conn.CloseNow()
-	}()
+func (c *Lobby) HandleConn(idx int) {
+	plr := &c.AllUsers[idx]
+	defer c.Exit(idx)
 
-	isEmpty := true
-	err := func() (err error) {
-		c.AllUsers.Mtx.RLock()
-		defer func(data []byte) {
-			err = WriteTimeout(time.Second*5, plr.Conn, data)
-		}(c.Board.cache)
-		for _, v := range c.AllUsers.M { // load current state of the game
-			if v.Place >= 0 {
-				if v == plr {
-					isEmpty = false
-				}
-
-				defer func(data []byte) {
-					err = WriteTimeout(time.Second*5, plr.Conn, data)
-				}(EmptyCards(v.cache, isEmpty))
-
-				isEmpty = true
-			}
-		}
-		c.AllUsers.Mtx.RUnlock()
-		return
-	}()
+	err := c.LoadCurrentState(idx)
 	if err != nil {
 		return
 	}
@@ -106,11 +125,11 @@ func (c *Lobby) HandleConn(plr *PlayUnit) {
 }
 func (l *Lobby) BroadcastPlayer(plr *PlayUnit, IsExposed bool) {
 
-	l.AllUsers.Mtx.Lock()
+	l.MapUsers.Mtx.Lock()
 	plr.StoreCache()
-	l.AllUsers.Mtx.Unlock()
+	l.MapUsers.Mtx.Unlock()
 
-	l.AllUsers.Mtx.RLock()
+	l.MapUsers.Mtx.RLock()
 	var isEmpty bool
 	for _, val := range l.AllUsers.M {
 
@@ -122,28 +141,28 @@ func (l *Lobby) BroadcastPlayer(plr *PlayUnit, IsExposed bool) {
 		defer WriteTimeout(time.Second*5, val.Conn, EmptyCards(plr.cache, isEmpty))
 
 	}
-	l.AllUsers.Mtx.RUnlock()
+	l.MapUsers.Mtx.RUnlock()
 
 }
 func (l *Lobby) BroadcastBoard(brd *GameBoard) {
 
-	l.AllUsers.Mtx.Lock()
+	l.MapUsers.Mtx.Lock()
 	brd.StoreCache()
-	l.AllUsers.Mtx.Unlock()
+	l.MapUsers.Mtx.Unlock()
 
-	l.AllUsers.Mtx.RLock()
+	l.MapUsers.Mtx.RLock()
 	for _, val := range l.AllUsers.M {
 		defer WriteTimeout(time.Second*5, val.Conn, brd.cache)
 	}
-	l.AllUsers.Mtx.RUnlock()
+	l.MapUsers.Mtx.RUnlock()
 
 }
 func (l *Lobby) BroadcastBytes(b []byte) {
-	l.AllUsers.Mtx.RLock()
+	l.MapUsers.Mtx.RLock()
 	for _, val := range l.AllUsers.M {
 		defer WriteTimeout(time.Second*5, val.Conn, b)
 	}
-	l.AllUsers.Mtx.RUnlock()
+	l.MapUsers.Mtx.RUnlock()
 }
 
 func WriteTimeout(timeout time.Duration, c *websocket.Conn, msg []byte) error {
@@ -170,4 +189,67 @@ func EmptyCards(data []byte, isEmpty bool) (data2 []byte) { // in order to not m
 	}
 	copy(data, data2)
 	return data2
+}
+func (l *Lobby) Exit(idx int) {
+	p := &l.AllUsers[idx]
+	if p.Place == -2 {
+		l.MapUsers.Mtx.Lock()
+		delete(l.MapUsers.M, p.User_id)
+		p.Place = -3
+		l.MapUsers.Mtx.Unlock()
+
+	}
+	p.Conn.CloseNow()
+}
+
+func (l *Lobby) LoadPlayer(userid, name string) (int, bool) {
+	l.MapUsers.Mtx.RLock()
+	pl, ok := l.MapUsers.M[userid]
+	l.MapUsers.Mtx.RUnlock()
+	if ok {
+		return pl, true
+	} else {
+		l.MapUsers.Mtx.Lock()
+		defer l.MapUsers.Mtx.Unlock()
+
+		if len(l.MapUsers.M) < 50 {
+			for i := range l.AllUsers {
+				if l.AllUsers[i].Place == -3 {
+					l.MapUsers.M[userid] = i
+					l.AllUsers[i].Place = -2
+					return i, true
+				}
+			}
+		}
+		// plr = &lobby.PlayUnit{User_id: user_id, Name: name, Place: -2, Cards: make([]string, 0, 3), CardsEval: make([]poker.Card, 0, 2)}
+	}
+	return -1, false
+}
+func (l *Lobby) LoadCurrentState(idx int) (err error) {
+	plr := &l.AllUsers[idx]
+	isEmpty := true
+	l.MapUsers.Mtx.RLock()
+
+	defer func(data []byte) {
+		err = WriteTimeout(time.Second*5, plr.Conn, data)
+	}(l.Board.cache)
+
+	for i := range l.Players { // load current state of the game
+		plrs := &l.AllUsers[l.Players[i]]
+		if plrs.Place >= 0 {
+			if plrs == plr {
+				isEmpty = false
+			}
+
+			defer func(data []byte) {
+				err = WriteTimeout(time.Second*5, plrs.Conn, data)
+			}(EmptyCards(plrs.cache, isEmpty))
+
+			isEmpty = true
+		}
+	}
+
+	l.MapUsers.Mtx.RUnlock()
+
+	return
 }

@@ -24,6 +24,7 @@ type PlayUnit struct {
 	TimeTurn  int64           `json:"TimeTurn"` // turn time in seconds
 	Name      string          `json:"Name"`
 	User_id   string          `json:"UserId"`
+	IsAllIn   bool            `json:"-"`
 	Conn      *websocket.Conn `json:"-"`
 	cache     []byte          `json:"-"`
 	CardsEval poker.CardList  `json:"-"`
@@ -41,6 +42,7 @@ func (p *PlayUnit) StoreCache() []byte {
 type GameBoard struct {
 	Cards       []string       `json:"Cards"`
 	Bank        int            `json:"Bank"`
+	MaxBet      int            `json:"MaxBet"`
 	TurnPlace   int            `json:"TurnPlace"`
 	DealerPlace int            `json:"DealerPlace"`
 	Deadline    int64          `json:"Deadline"`

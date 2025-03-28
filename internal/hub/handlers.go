@@ -84,29 +84,20 @@ func (h *Hub) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 	lb, ok := h.lobby.Load(wsurl)
 
 	if ok {
-		var plr *lobby.PlayUnit
-
-		lb.AllUsers.Mtx.Lock()
-		pl, ok := lb.AllUsers.M[user_id]
-		if ok {
-			plr = pl
-		} else {
-			if len(lb.AllUsers.M) >= 15 {
-				http.Error(w, "room is full", http.StatusBadRequest)
-				return
-			}
-			plr = &lobby.PlayUnit{User_id: user_id, Name: name, Place: -2, Cards: make([]string, 0, 3), CardsEval: make([]poker.Card, 0, 2)}
-			lb.AllUsers.M[user_id] = plr
+		p := lb.LoadPlayer(user_id)
+		if !ok {
+			http.Error(w, "room is full", http.StatusBadRequest)
+			return
 		}
-		lb.AllUsers.Mtx.Unlock()
-
 		conn, err := websocket.Accept(w, r, nil)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
+			lb.Exit(p)
 			return
 		}
-		plr.Conn = conn
-		go lb.HandleConn(plr)
+		p.Conn = conn
+		p.Name = name
+		go lb.HandleConn(p)
 	}
 }
 func (h *Hub) CreateLobby(w http.ResponseWriter, r *http.Request) {
@@ -118,13 +109,14 @@ func (h *Hub) CreateLobby(w http.ResponseWriter, r *http.Request) {
 	gm.Impl = cstm
 	isSet := false
 	var plr *lobby.PlayUnit
+	h.lobby.Store()
 	for !isSet {
 		hash := new(maphash.Hash).Sum64()
 		h.lobby.SetIf(hash, func(previousVale *lobby.Lobby, previousFound bool) (value *lobby.Lobby, set bool) {
 			if !previousFound {
-				lb.AllUsers.M = make(map[string]*lobby.PlayUnit)
+				lb.Pr.AllUsers.M = make(map[string]*lobby.PlayUnit)
 				plr = &lobby.PlayUnit{User_id: user_id, Name: name, Place: -2, Cards: make([]string, 0, 3), CardsEval: make([]poker.Card, 0, 2)}
-				lb.AllUsers.M[user_id] = plr
+				lb.Pr.AllUsers.M[user_id] = plr
 				previousVale = lb
 				previousFound = true
 				isSet = true

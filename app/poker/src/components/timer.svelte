@@ -29,5 +29,5 @@
     </script>
     
     {#if timeLeft > 0}
-        <div>{timeLeft}s</div>
+        <input type="range" bind:value={timeLeft}/>
     {/if}

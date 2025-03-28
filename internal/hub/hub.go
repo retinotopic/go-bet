@@ -4,6 +4,7 @@ import (
 	"context"
 	"hash/maphash"
 	"strconv"
+	// "sync"
 	"time"
 
 	"github.com/Nerdmaster/poker"
@@ -96,7 +97,7 @@ func (h *Hub) requests() {
 
 func (h *Hub) startRatingGame(plrs []*awaitingPlayer) {
 	lb := &lobby.Lobby{}
-	gm := &lobby.Game{Lobby: lb}
+	gm := &lobby.Game{Lb: lb}
 	rtng := &lobby.RatingImpl{Game: gm}
 	gm.Impl = rtng
 	isSet := false
@@ -104,13 +105,13 @@ func (h *Hub) startRatingGame(plrs []*awaitingPlayer) {
 		hash := new(maphash.Hash).Sum64()
 		h.lobby.SetIf(hash, func(previousVale *lobby.Lobby, previousFound bool) (value *lobby.Lobby, set bool) {
 			if !previousFound {
-				lb.AllUsers.M = make(map[string]*lobby.PlayUnit)
+				lb.Pr.AllUsers.M = make(map[string]*lobby.PlayUnit)
 				url := strconv.FormatUint(hash, 10)
 				//urlb := []byte(`{"URL":"` + url + `"}`)
 				for _, plr := range plrs {
 					if plr != nil {
 						p := &lobby.PlayUnit{User_id: plr.User_id, Name: plr.Name, Cards: make([]string, 0, 3), CardsEval: make([]poker.Card, 0, 2)}
-						lb.AllUsers.M[plr.User_id] = p
+						lb.Pr.AllUsers.M[plr.User_id] = p
 						plr.URL = url
 						p.Place = 0
 					}
@@ -125,7 +126,7 @@ func (h *Hub) startRatingGame(plrs []*awaitingPlayer) {
 						}
 					}
 					rtng.Validate(lobby.Ctrl{Ctrl: 3})
-					rtng.LobbyStart(gm)
+					rtng.Lb.LobbyStart(gm)
 				}()
 			} else {
 				previousFound = false
