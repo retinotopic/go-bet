@@ -1,14 +1,16 @@
 package lobby
 
 import (
-	"sync"
+// "sync"
 )
 
 func (rs *Lobby) Next(offset int) *PlayUnit {
-	pl := &rs.Players[rs.Idx]
+	pl := &rs.AllUsers[rs.Players[rs.Idx]]
 	for pl.IsAway || pl.IsFold || pl.IsAllIn {
+
 		rs.Idx = (rs.Idx + offset) % len(rs.Players)
-		pl = &rs.Players[rs.Idx]
+
+		pl = &rs.AllUsers[rs.Players[rs.Idx]]
 	}
 	return pl
 }

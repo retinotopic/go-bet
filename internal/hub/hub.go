@@ -38,7 +38,9 @@ type awaitingPlayer struct {
 	Queued  bool   `json:"-"`
 	QueueId int    `json:"-"`
 	URL     string `json:"URL"`
-	Conn    *websocket.Conn
+
+	lastTryToConnect time.Time
+	Conn             *websocket.Conn
 }
 type Hub struct {
 	db                Databaser
@@ -105,13 +107,13 @@ func (h *Hub) startRatingGame(plrs []*awaitingPlayer) {
 		hash := new(maphash.Hash).Sum64()
 		h.lobby.SetIf(hash, func(previousVale *lobby.Lobby, previousFound bool) (value *lobby.Lobby, set bool) {
 			if !previousFound {
-				lb.Pr.AllUsers.M = make(map[string]*lobby.PlayUnit)
+				lb.MapUsers.M = make(map[string]int)
 				url := strconv.FormatUint(hash, 10)
 				//urlb := []byte(`{"URL":"` + url + `"}`)
 				for _, plr := range plrs {
 					if plr != nil {
 						p := &lobby.PlayUnit{User_id: plr.User_id, Name: plr.Name, Cards: make([]string, 0, 3), CardsEval: make([]poker.Card, 0, 2)}
-						lb.Pr.AllUsers.M[plr.User_id] = p
+						lb.MapUsers.M[plr.User_id] = p
 						plr.URL = url
 						p.Place = 0
 					}

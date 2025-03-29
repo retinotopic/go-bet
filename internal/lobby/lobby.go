@@ -7,6 +7,7 @@ import (
 	"github.com/coder/websocket"
 	"sync"
 	"time"
+	// "github.com/panjf2000/ants/v2"
 )
 
 const (
@@ -25,7 +26,6 @@ type Lobby struct {
 	ValidateCh   chan Ctrl
 	Shutdown     chan bool
 	Url          uint64
-	bytesbuf     [][]byte
 	MapUsers     mapUsers
 	AllUsers     []PlayUnit
 
@@ -123,44 +123,46 @@ func (c *Lobby) HandleConn(idx int) {
 		time.Sleep(time.Millisecond * 500)
 	}
 }
-func (l *Lobby) BroadcastPlayer(plr *PlayUnit, IsExposed bool) {
-
+func (l *Lobby) BroadcastPlayer(idx int, IsExposed bool) {
+	plr := &l.AllUsers[idx]
 	l.MapUsers.Mtx.Lock()
 	plr.StoreCache()
 	l.MapUsers.Mtx.Unlock()
 
 	l.MapUsers.Mtx.RLock()
 	var isEmpty bool
-	for _, val := range l.AllUsers.M {
-
-		if val == plr || IsExposed {
+	for _, v := range l.MapUsers.M {
+		pl := &l.AllUsers[v]
+		if pl == plr || IsExposed {
 			isEmpty = false
 		} else {
 			isEmpty = true
 		}
-		defer WriteTimeout(time.Second*5, val.Conn, EmptyCards(plr.cache, isEmpty))
+		go WriteTimeout(time.Second*5, pl.Conn, EmptyCards(plr.cache, isEmpty))
 
 	}
 	l.MapUsers.Mtx.RUnlock()
 
 }
-func (l *Lobby) BroadcastBoard(brd *GameBoard) {
+func (l *Lobby) BroadcastBoard() {
 
 	l.MapUsers.Mtx.Lock()
-	brd.StoreCache()
+	l.Board.StoreCache()
 	l.MapUsers.Mtx.Unlock()
 
 	l.MapUsers.Mtx.RLock()
-	for _, val := range l.AllUsers.M {
-		defer WriteTimeout(time.Second*5, val.Conn, brd.cache)
+	for _, v := range l.MapUsers.M {
+		pl := l.AllUsers[v]
+		go WriteTimeout(time.Second*5, pl.Conn, l.Board.cache)
 	}
 	l.MapUsers.Mtx.RUnlock()
 
 }
 func (l *Lobby) BroadcastBytes(b []byte) {
 	l.MapUsers.Mtx.RLock()
-	for _, val := range l.AllUsers.M {
-		defer WriteTimeout(time.Second*5, val.Conn, b)
+	for _, v := range l.MapUsers.M {
+		pl := l.AllUsers[v]
+		go WriteTimeout(time.Second*5, pl.Conn, b)
 	}
 	l.MapUsers.Mtx.RUnlock()
 }
@@ -230,10 +232,6 @@ func (l *Lobby) LoadCurrentState(idx int) (err error) {
 	isEmpty := true
 	l.MapUsers.Mtx.RLock()
 
-	defer func(data []byte) {
-		err = WriteTimeout(time.Second*5, plr.Conn, data)
-	}(l.Board.cache)
-
 	for i := range l.Players { // load current state of the game
 		plrs := &l.AllUsers[l.Players[i]]
 		if plrs.Place >= 0 {
@@ -241,14 +239,12 @@ func (l *Lobby) LoadCurrentState(idx int) (err error) {
 				isEmpty = false
 			}
 
-			defer func(data []byte) {
-				err = WriteTimeout(time.Second*5, plrs.Conn, data)
-			}(EmptyCards(plrs.cache, isEmpty))
+			go WriteTimeout(time.Second*5, plrs.Conn, EmptyCards(plrs.cache, isEmpty))
 
 			isEmpty = true
 		}
 	}
-
+	go WriteTimeout(time.Second*5, plr.Conn, l.Board.cache)
 	l.MapUsers.Mtx.RUnlock()
 
 	return
