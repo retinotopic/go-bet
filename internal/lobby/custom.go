@@ -2,7 +2,7 @@ package lobby
 
 import (
 	"strconv"
-	"sync"
+	// "sync"
 	"time"
 	"unicode"
 
@@ -32,9 +32,9 @@ func (c *Lobby) ValidateCustom(ctrl Ctrl) {
 				if i == 8 {
 					break
 				}
-				if pl.Place >= 0 {
+				if c.AllUsers[pl].Place >= 0 {
 					c.Players = append(c.Players, pl)
-					pl.Bank = c.Board.Bank // give the player his starting stack
+					c.AllUsers[pl].Bank = c.Board.Bank // give the player his starting stack
 					i++
 				}
 			}
@@ -48,10 +48,10 @@ func (c *Lobby) ValidateCustom(ctrl Ctrl) {
 			if ok && ctrl.Place >= 0 && ctrl.Place <= 7 && !c.Seats[ctrl.Place].isOccupied {
 				name := ctrl.Text[ctrl.Ctrl:]
 				if isAlphanumeric(name) {
-					pl.Name = name
+					c.AllUsers[pl].Name = name
 					c.Seats[ctrl.Place].isOccupied = true
-					pl.Place = ctrl.Place
-					pl.StoreCache()
+					c.AllUsers[pl].Place = ctrl.Place
+					c.AllUsers[pl].StoreCache()
 					c.BroadcastPlayer(ctrl.Plr, true)
 				}
 			}
@@ -63,14 +63,14 @@ func (c *Lobby) ValidateCustom(ctrl Ctrl) {
 		if err != nil {
 			return
 		}
-		WriteTimeout(time.Second*5, c.Admin.Conn, b)
-	} else if ctrl.Place == -2 && ctrl.Plr.Place >= 0 { // player leaves
+		WriteTimeout(time.Second*5, c.AllUsers[c.Admin].Conn, b)
+	} else if ctrl.Place == -2 && c.AllUsers[ctrl.Plr].Place >= 0 { // player leaves
 		c.MapUsers.Mtx.RLock()
-		pl, ok := c.MapUsers.M[ctrl.Plr.User_id]
+		pl, ok := c.MapUsers.M[c.AllUsers[ctrl.Plr].User_id]
 		c.Seats[ctrl.Place].isOccupied = false
 		if ok {
-			pl.Place = ctrl.Place
-			pl.cache = pl.StoreCache()
+			c.AllUsers[pl].Place = ctrl.Place
+			c.AllUsers[pl].cache = c.AllUsers[pl].StoreCache()
 			c.BroadcastPlayer(ctrl.Plr, true)
 		}
 		c.MapUsers.Mtx.RUnlock()

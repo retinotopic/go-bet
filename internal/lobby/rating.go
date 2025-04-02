@@ -7,13 +7,13 @@ import (
 )
 
 func (l *Lobby) ValidateRating(ctrl Ctrl) {
-	timer := time.NewTimer(time.Minute * time.Duration(ctrl.Ctrl)) //pre-set timer
+	l.TurnTimer.Reset(time.Minute * time.Duration(ctrl.Ctrl)) //pre-set timer
 	l.Board.Deadline = time.Now().Add(time.Minute * time.Duration(ctrl.Ctrl)).Unix()
 	l.Board.Bank = 1000
 	for i := range 8 {
 		l.Seats[i].place = uint8(i)
 	}
-	for range timer.C {
+	for range l.TurnTimer.C {
 		l.StartGameCh <- true
 		return
 	}
@@ -28,14 +28,7 @@ func (l *Lobby) PlayerOutRating(plr []PlayUnit, place int) {
 		if err != nil {
 			return
 		}
-		data, err := l.q.NewMessage(userid, rating)
-		if err != nil {
-			return
-		}
-		err = l.q.PublishTask(data, 5)
-		if err != nil {
-			return
-		}
+		l.UpdateRating(userid, rating)
 		plr[i].Place = -2
 		defer plr[i].StoreCache()
 

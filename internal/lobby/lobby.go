@@ -21,7 +21,7 @@ type Lobby struct {
 	// Lobby info
 	HasBegun     bool
 	PlayerCh     chan Ctrl
-	checkTimeout *time.Ticker
+	CheckTimeout *time.Ticker
 	lastResponse time.Time
 	ValidateCh   chan Ctrl
 	Shutdown     chan bool
@@ -32,19 +32,19 @@ type Lobby struct {
 	// In process game info
 	InitialPlayerBank int
 	Seats             [8]Seats
-	topPlaces         []top
+	TopPlaces         []Top
 
 	// indices of AllUsers slice elements
-	winners []int
-	losers  []int
+	Winners []int
+	Losers  []int
 	Deck    Deck
 
 	// current player
-	pl          int
+	Pl          int
 	TurnTimer   *time.Timer
 	BlindTimer  *time.Timer
 	StartGameCh chan bool
-	stop        chan bool
+	Stop        chan bool
 	BlindRaise  bool
 
 	Players  []int
@@ -56,7 +56,7 @@ type Lobby struct {
 	Validate func(Ctrl)
 
 	// method for handling kicked players
-	PlayerOut func([]PlayUnit, int)
+	PlayerOut func([]int, int)
 
 	//for custom lobbies
 	AdminOnce sync.Once
@@ -73,17 +73,15 @@ type mapUsers struct {
 	Mtx sync.RWMutex
 }
 
-func (l *Lobby) LobbyStart(gm *Lobby) {
+func (l *Lobby) LobbyStart() {
 	go l.Game()
-	l.checkTimeout = time.NewTicker(time.Minute * 3)
-	l.Shutdown = make(chan bool, 10)
-	l.PlayerCh = make(chan Ctrl)
+	l.CheckTimeout.Reset(time.Minute * 3)
 	timeout := time.Minute * 4
 	for {
 		select {
-		case <-l.checkTimeout.C:
+		case <-l.CheckTimeout.C:
 			if time.Since(l.lastResponse) > timeout {
-				for range 3 { //shutdowns,two for game and one for lobby
+				for range 3 {
 					l.Shutdown <- true
 				}
 			}
@@ -104,7 +102,7 @@ func (c *Lobby) HandleConn(idx int) {
 	}
 	for { // listening for actions
 		ctrl := Ctrl{}
-		ctrl.Plr = plr
+		ctrl.Plr = idx
 		_, data, err := plr.Conn.Read(context.TODO())
 		if err != nil {
 			break
@@ -223,7 +221,6 @@ func (l *Lobby) LoadPlayer(userid, name string) (int, bool) {
 				}
 			}
 		}
-		// plr = &lobby.PlayUnit{User_id: user_id, Name: name, Place: -2, Cards: make([]string, 0, 3), CardsEval: make([]poker.Card, 0, 2)}
 	}
 	return -1, false
 }

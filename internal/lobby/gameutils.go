@@ -4,15 +4,12 @@ import (
 // "sync"
 )
 
-func (rs *Lobby) Next(offset int) *PlayUnit {
+func (rs *Lobby) Next(offset int) int {
 	pl := &rs.AllUsers[rs.Players[rs.Idx]]
 	for pl.IsAway || pl.IsFold || pl.IsAllIn {
-
 		rs.Idx = (rs.Idx + offset) % len(rs.Players)
-
-		pl = &rs.AllUsers[rs.Players[rs.Idx]]
 	}
-	return pl
+	return rs.Players[rs.Idx]
 }
 func (rs *Lobby) NextDealer(start, offset int) int {
 	rs.Idx = (start + offset) % len(rs.Players)

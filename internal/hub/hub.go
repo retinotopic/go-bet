@@ -2,28 +2,70 @@ package hub
 
 import (
 	"context"
+	crand "crypto/rand"
 	"hash/maphash"
+	mrand "math/rand/v2"
 	"strconv"
-	// "sync"
+	"sync"
 	"time"
+
+	// "golang.org/x/sync/errgroup"
 
 	"github.com/Nerdmaster/poker"
 	"github.com/coder/websocket"
-	csmap "github.com/mhmtszr/concurrent-swiss-map"
 
 	"github.com/retinotopic/go-bet/internal/lobby"
 )
 
-func NewPump(lenBuffer int, queue lobby.Queue) *Hub {
-	lm := csmap.Create( // URL to room
-		csmap.WithShardCount[uint64, *lobby.Lobby](208),
-		csmap.WithSize[uint64, *lobby.Lobby](624),
-	)
-	plm := csmap.Create( // user_id to room URL
-		csmap.WithShardCount[string, *awaitingPlayer](1664),
-		csmap.WithSize[string, *awaitingPlayer](4992),
-	)
-	hub := &Hub{reqPlayers: make(chan *awaitingPlayer, lenBuffer), lobby: lm, players: plm}
+func NewPump(lenBuffer int) *Hub {
+	pool := &sync.Pool{
+		New: func() any {
+			lb := &lobby.Lobby{}
+
+			var buf [32]byte
+			bufs := make([]byte, 32)
+			crand.Read(bufs) // generating cryptographically random slice of bytes
+			copy(buf[:], bufs)
+			rand := mrand.New(mrand.NewChaCha8(buf)) //  and using it as a ChaCha8 seed
+			lb.Deck = lobby.NewDeck(rand)            // and using it as a source for mrand
+
+			lb.TopPlaces = make([]lobby.Top, 0, 8) //---\
+			lb.Winners = make([]int, 0, 8)         //	  >----- reusable memory for post-river evaluation
+			lb.Losers = make([]int, 0, 8)          //---/
+
+			lb.Board.HiddenCards = make([]string, 5)  // hidden cards that haven't come to the table yet (string)
+			lb.Board.Cardlist = make([]poker.Card, 7) // poker.CardList for evaluating hand
+			lb.Board.Cards = make([]string, 0, 5)     // current cards on table for json sending
+
+			lb.Shutdown = make(chan bool, 10)
+			lb.PlayerCh = make(chan lobby.Ctrl)
+			lb.Stop = make(chan bool, 1)
+			lb.StartGameCh = make(chan bool, 1)
+			lb.ValidateCh = make(chan lobby.Ctrl)
+			lb.PlayerCh = make(chan lobby.Ctrl)
+
+			lb.CheckTimeout = time.NewTicker(time.Minute * 3)
+			lb.CheckTimeout.Stop()
+			lb.TurnTimer = time.NewTimer(time.Second * 10)
+			lb.TurnTimer.Stop()
+			lb.BlindTimer = time.NewTimer(time.Second * 10)
+			lb.BlindTimer.Stop()
+
+			lb.MapUsers.M = make(map[string]int)
+			lb.AllUsers = make([]lobby.PlayUnit, 50)
+			for i := range lb.AllUsers {
+				lb.AllUsers[i].Cards = make([]string, 0, 3)
+				lb.AllUsers[i].CardsEval = make([]poker.Card, 0, 2)
+				lb.AllUsers = append(lb.AllUsers)
+			}
+
+			return lb
+		},
+	}
+
+	hub := &Hub{reqPlayers: make(chan *awaitingPlayer, lenBuffer),
+		lobby: sync.Map{}, players: sync.Map{}, lobbyPool: pool,
+	}
 	hub.requests()
 	return hub
 }
@@ -44,8 +86,9 @@ type awaitingPlayer struct {
 }
 type Hub struct {
 	db                Databaser
-	lobby             *csmap.CsMap[uint64, *lobby.Lobby]    // URL to room
-	players           *csmap.CsMap[string, *awaitingPlayer] // user_id to waiting player OR room URL
+	lobby             sync.Map // URL to *Lobby map[uint64]*Lobby
+	players           sync.Map // user_id to room URL map[string]uint64
+	lobbyPool         *sync.Pool
 	reqPlayers        chan *awaitingPlayer
 	ActivityCounter   int
 	stackids          []int
@@ -98,45 +141,34 @@ func (h *Hub) requests() {
 }
 
 func (h *Hub) startRatingGame(plrs []*awaitingPlayer) {
-	lb := &lobby.Lobby{}
-	gm := &lobby.Game{Lb: lb}
-	rtng := &lobby.RatingImpl{Game: gm}
-	gm.Impl = rtng
-	isSet := false
-	for !isSet {
-		hash := new(maphash.Hash).Sum64()
-		h.lobby.SetIf(hash, func(previousVale *lobby.Lobby, previousFound bool) (value *lobby.Lobby, set bool) {
-			if !previousFound {
-				lb.MapUsers.M = make(map[string]int)
-				url := strconv.FormatUint(hash, 10)
-				//urlb := []byte(`{"URL":"` + url + `"}`)
-				for _, plr := range plrs {
-					if plr != nil {
-						p := &lobby.PlayUnit{User_id: plr.User_id, Name: plr.Name, Cards: make([]string, 0, 3), CardsEval: make([]poker.Card, 0, 2)}
-						lb.MapUsers.M[plr.User_id] = p
-						plr.URL = url
-						p.Place = 0
-					}
-				}
-				previousVale = lb
-				previousFound = true
-				isSet = true
-				go func() {
-					for _, plr := range plrs {
-						if plr != nil {
-							defer h.players.Delete(plr.User_id)
-						}
-					}
-					rtng.Validate(lobby.Ctrl{Ctrl: 3})
-					rtng.Lb.LobbyStart(gm)
-				}()
-			} else {
-				previousFound = false
-			}
-			return previousVale, previousFound
-		})
+	lb := h.lobbyPool.Get().(*lobby.Lobby)
+	lb.Validate = lb.ValidateRating
+	loaded := true
+	var hash uint64
+	for loaded {
+		hash = new(maphash.Hash).Sum64()
+		_, loaded = h.lobby.LoadOrStore(hash, &lb)
 	}
 
+	for i, plr := range plrs {
+		if plr != nil {
+			lb.MapUsers.M[plr.User_id] = i
+			h.players.Store(plr.User_id, hash)
+			lb.LoadPlayer(plr.User_id, plr.Name)
+		}
+	}
+	go func() {
+		defer func() {
+			for _, plr := range plrs {
+				if plr != nil {
+					h.players.Delete(plr.User_id)
+				}
+			}
+		}()
+		lb.Validate(lobby.Ctrl{Ctrl: 3})
+		lb.LobbyStart()
+		h.lobbyPool.Put(lb)
+	}()
 }
 func WriteTimeout(timeout time.Duration, c *websocket.Conn, msg []byte) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)

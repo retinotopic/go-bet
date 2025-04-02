@@ -7,10 +7,10 @@ import (
 )
 
 type Ctrl struct {
-	Place int       `json:"Place"`
-	Ctrl  int       `json:"Ctrl"`
-	Text  string    `json:"Text"`
-	Plr   *PlayUnit `json:"-"`
+	Place int    `json:"Place"`
+	Ctrl  int    `json:"Ctrl"`
+	Text  string `json:"Text"`
+	Plr   int    `json:"-"` //index of player in AllUsers
 }
 
 type PlayUnit struct {
@@ -50,7 +50,7 @@ type GameBoard struct {
 	Active      bool           `json:"Active"`
 	IsRating    bool           `json:"IsRating"`
 	cache       []byte         `json:"-"`
-	cards       poker.CardList `json:"-"`
+	Cardlist    poker.CardList `json:"-"`
 	HiddenCards []string       `json:"-"`
 }
 
