@@ -15,7 +15,6 @@ func (rs *Lobby) NextDealer(start, offset int) int {
 	rs.Idx = (start + offset) % len(rs.Players)
 	return rs.Idx
 }
-func (l *Lobby) NewUser()
 
 // small blind is calculated via: initial player stack * stackShare[i]
 var stackShare = []float32{

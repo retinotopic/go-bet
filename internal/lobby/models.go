@@ -24,6 +24,7 @@ type PlayUnit struct {
 	TimeTurn  int64           `json:"TimeTurn"` // turn time in seconds
 	Name      string          `json:"Name"`
 	User_id   string          `json:"UserId"`
+	SidePots  [8]int          `json:"-"`
 	IsAllIn   bool            `json:"-"`
 	Conn      *websocket.Conn `json:"-"`
 	cache     []byte          `json:"-"`

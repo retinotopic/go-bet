@@ -30,7 +30,7 @@ func NewPump(lenBuffer int) *Hub {
 			lb.Deck = lobby.NewDeck(rand)            // and using it as a source for mrand
 
 			lb.TopPlaces = make([]lobby.Top, 0, 8) //---\
-			lb.Winners = make([]int, 0, 8)         //	  >----- reusable memory for post-river evaluation
+			lb.Winners = make([]int, 0, 8)         //	 >----- reusable memory for post-river evaluation
 			lb.Losers = make([]int, 0, 8)          //---/
 
 			lb.Board.HiddenCards = make([]string, 5)  // hidden cards that haven't come to the table yet (string)
@@ -48,7 +48,7 @@ func NewPump(lenBuffer int) *Hub {
 			lb.CheckTimeout.Stop()
 			lb.TurnTimer = time.NewTimer(time.Second * 10)
 			lb.TurnTimer.Stop()
-			lb.BlindTimer = time.NewTimer(time.Second * 10)
+			lb.BlindTimer = time.NewTimer(time.Minute * 3)
 			lb.BlindTimer.Stop()
 
 			lb.MapUsers.M = make(map[string]int)
@@ -56,7 +56,6 @@ func NewPump(lenBuffer int) *Hub {
 			for i := range lb.AllUsers {
 				lb.AllUsers[i].Cards = make([]string, 0, 3)
 				lb.AllUsers[i].CardsEval = make([]poker.Card, 0, 2)
-				lb.AllUsers = append(lb.AllUsers)
 			}
 
 			return lb

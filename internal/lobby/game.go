@@ -10,8 +10,10 @@ import (
 
 type Top struct {
 	Place  int
-	Rating uint16
+	Rating int
+	Exiled bool
 }
+
 type Seats struct {
 	place      uint8 // zero to seven
 	isOccupied bool  // seat occupied or not
@@ -216,31 +218,87 @@ func (l *Lobby) DealNewHand() {
 
 func (l *Lobby) CalcWinners() {
 	l.TopPlaces = l.TopPlaces[:0]
+	maxv1, maxv2 := 0, 0
 	for i, idx := range l.Players { // evaluate players cards and rank them
 		v := &l.AllUsers[idx]
 		if !v.IsFold && !v.IsAway {
+			if i == 0 {
+				maxv1, maxv2 = idx, idx
+			}
 			l.Board.Cardlist[0] = v.CardsEval[0]
 			l.Board.Cardlist[1] = v.CardsEval[1]
 
 			eval := l.Board.Cardlist.Evaluate()
 			v.Cards[0] = poker.GetHandRank(eval).String()
-			l.TopPlaces = append(l.TopPlaces, Top{Rating: eval, Place: i})
+			l.TopPlaces = append(l.TopPlaces, Top{Rating: int(eval), Place: idx})
+			if maxv1 < v.Bet {
+				maxv2 = maxv1
+				maxv1 = v.Bet
+			} else if maxv2 < v.Bet && v.Bet < maxv1 {
+				maxv2 = v.Bet
+			}
 		}
 		v.IsFold = false
 	}
 	sort.Slice(l.TopPlaces, func(i, j int) bool {
 		return l.TopPlaces[i].Rating < l.TopPlaces[j].Rating
 	})
-	j := 0
-	for ; j == 0 || l.TopPlaces[j].Rating == l.TopPlaces[j-1].Rating; j++ {
-	}
-	share := l.Board.Bank / j
+	l.CalcSidePots(maxv1, maxv2)
 
-	for i := range j { // distribute the pot between Winners
-		pl := &l.AllUsers[l.TopPlaces[i].Place]
-		pl.Bank += share
+	for i := range l.TopPlaces {
 		go l.BroadcastPlayer(l.TopPlaces[i].Place, true)
 	}
 	l.Board.Bank = 0 // reset the board bank
 	time.Sleep(time.Second * 5)
+}
+func (l *Lobby) CalcSidePots(maxv1 int, maxv2 int) {
+	dif := maxv1 - maxv2
+	maxl := maxv1
+	i, j, share, shcount, maxv1, maxv2, lastRating := 0, 0, 0, 0, 0, 0, -1
+	for {
+		v := &l.AllUsers[l.TopPlaces[i].Place]
+		if v.Bet == maxl {
+			if !l.TopPlaces[i].Exiled {
+				if lastRating == -1 {
+					lastRating = l.TopPlaces[i].Rating
+				}
+				if l.TopPlaces[i].Rating < lastRating {
+					l.TopPlaces[i].Exiled = true
+				} else {
+					shcount++
+				}
+			}
+			v.SidePots[j] = dif
+			share += dif
+			v.Bet -= dif
+		}
+		if maxv1 < v.Bet {
+			maxv2 = maxv1
+			maxv1 = v.Bet
+		} else if maxv2 < v.Bet && v.Bet < maxv1 {
+			maxv2 = v.Bet
+		}
+		if i == len(l.TopPlaces)-1 {
+			share = share / shcount
+			done := true
+			for k := range l.TopPlaces {
+				v := &l.AllUsers[l.TopPlaces[k].Place]
+				if !l.TopPlaces[k].Exiled && v.SidePots[j] != 0 {
+					v.Bank += share
+				}
+				if v.Bet != 0 {
+					done = false
+				}
+				v.SidePots[j] = 0
+			}
+			if done {
+				break
+			}
+			dif = maxv1 - maxv2
+			maxl = maxv1
+			maxv1, maxv2, share, shcount, i, lastRating = 0, 0, 0, 0, -1, -1
+			j++
+		}
+		i++
+	}
 }

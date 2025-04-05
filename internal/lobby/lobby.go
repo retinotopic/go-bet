@@ -31,6 +31,7 @@ type Lobby struct {
 
 	// In process game info
 	InitialPlayerBank int
+	SidePots          [][]int
 	Seats             [8]Seats
 	TopPlaces         []Top
 
