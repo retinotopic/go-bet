@@ -1,9 +1,11 @@
 package lobby
 
 import (
+	"io"
+
 	"github.com/Nerdmaster/poker"
 	json "github.com/bytedance/sonic"
-	"github.com/coder/websocket"
+	// "github.com/coder/websocket"
 )
 
 type Ctrl struct {
@@ -14,25 +16,26 @@ type Ctrl struct {
 }
 
 type PlayUnit struct {
-	Cards     []string        `json:"Cards"`
-	IsFold    bool            `json:"IsFold"`
-	IsAway    bool            `json:"IsAway"`
-	HasActed  bool            `json:"HasActed"`
-	Bank      int             `json:"Bank"`
-	Bet       int             `json:"Bet"`
-	Place     int             `json:"Place"`
-	TimeTurn  int64           `json:"TimeTurn"` // turn time in seconds
-	Name      string          `json:"Name"`
-	User_id   string          `json:"UserId"`
-	SidePots  [8]int          `json:"-"`
-	IsAllIn   bool            `json:"-"`
-	Conn      *websocket.Conn `json:"-"`
-	cache     []byte          `json:"-"`
-	CardsEval poker.CardList  `json:"-"`
+	Cards     []string           `json:"Cards"`
+	IsFold    bool               `json:"IsFold"`
+	IsAway    bool               `json:"IsAway"`
+	HasActed  bool               `json:"HasActed"`
+	Bank      int                `json:"Bank"`
+	Bet       int                `json:"Bet"`
+	Place     int                `json:"Place"`
+	TimeTurn  int64              `json:"TimeTurn"` // turn time in seconds
+	Name      string             `json:"Name"`
+	User_id   string             `json:"UserId"`
+	SidePots  [8]int             `json:"-"`
+	IsAllIn   bool               `json:"-"`
+	Conn      io.ReadWriteCloser `json:"-"`
+	cache     []byte             `json:"-"`
+	CardsEval poker.CardList     `json:"-"`
 }
 
 func (p *PlayUnit) StoreCache() []byte {
 	var err error
+
 	p.cache, err = json.Marshal(p)
 	if err != nil {
 		panic("somehow bytedance messed up badly...")

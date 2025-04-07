@@ -2,6 +2,7 @@ package hub
 
 import (
 	"hash/maphash"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -12,6 +13,12 @@ import (
 	"github.com/retinotopic/go-bet/internal/lobby"
 	"github.com/retinotopic/go-bet/internal/middleware"
 )
+
+// github:coder/websocket DOESNT SUPPORT getting ReadWriteCloser FROM CONN!!!!!!!!!!!!!!!!
+type ReadWriteCloserStruct struct {
+	io.Reader
+	io.WriteCloser
+}
 
 func (h *Hub) GetInitialData(user_id string, conn *websocket.Conn) (err error) {
 
@@ -74,7 +81,6 @@ func (h *Hub) FindGame(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func (h *Hub) ConnectLobby(w http.ResponseWriter, r *http.Request) {
-	//check for player presence in map
 	user_id, name := middleware.GetUser(r.Context())
 
 	wsurl, err := strconv.ParseUint(r.PathValue("roomId"), 10, 0)
@@ -82,22 +88,29 @@ func (h *Hub) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
 	lb, ok := h.lobby.Load(wsurl)
-
+	l := lb.(*lobby.Lobby)
 	if ok {
-		p := lb.LoadPlayer(user_id)
+		idx, ok := l.LoadPlayer(user_id, name)
 		if !ok {
 			http.Error(w, "room is full", http.StatusBadRequest)
 			return
 		}
 		conn, err := websocket.Accept(w, r, nil)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			lb.Exit(p)
+			l.Exit(idx)
 			return
 		}
-		p.Conn = conn
-		p.Name = name
-		go lb.HandleConn(p)
+		wr, err := conn.Writer(r.Context(), websocket.MessageText)
+		if err != nil {
+			l.Exit(idx)
+			conn.Close(3008, "timeout")
+		}
+		_, rd, err := conn.Reader(r.Context())
+		if err != nil {
+			l.Exit(idx)
+			conn.Close(3008, "timeout")
+		}
+		go l.HandlePlayer(idx, ReadWriteCloserStruct{rd, wr})
 	}
 }
 func (h *Hub) CreateLobby(w http.ResponseWriter, r *http.Request) {

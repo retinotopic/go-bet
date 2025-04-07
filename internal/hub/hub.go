@@ -12,6 +12,7 @@ import (
 	// "golang.org/x/sync/errgroup"
 
 	"github.com/Nerdmaster/poker"
+	json "github.com/bytedance/sonic"
 	"github.com/coder/websocket"
 
 	"github.com/retinotopic/go-bet/internal/lobby"
@@ -166,6 +167,7 @@ func (h *Hub) startRatingGame(plrs []*awaitingPlayer) {
 		}()
 		lb.Validate(lobby.Ctrl{Ctrl: 3})
 		lb.LobbyStart()
+		h.lobby.Delete(hash)
 		h.lobbyPool.Put(lb)
 	}()
 }
