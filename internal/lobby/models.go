@@ -1,6 +1,7 @@
 package lobby
 
 import (
+	"bytes"
 	"io"
 
 	"github.com/Nerdmaster/poker"
@@ -16,35 +17,36 @@ type Ctrl struct {
 }
 
 type PlayUnit struct {
-	Cards     []string           `json:"Cards"`
-	IsFold    bool               `json:"IsFold"`
-	IsAway    bool               `json:"IsAway"`
-	HasActed  bool               `json:"HasActed"`
-	Bank      int                `json:"Bank"`
-	Bet       int                `json:"Bet"`
-	Place     int                `json:"Place"`
-	TimeTurn  int64              `json:"TimeTurn"` // turn time in seconds
-	Name      string             `json:"Name"`
-	User_id   string             `json:"UserId"`
-	SidePots  [8]int             `json:"-"`
-	IsAllIn   bool               `json:"-"`
-	Conn      io.ReadWriteCloser `json:"-"`
-	cache     []byte             `json:"-"`
-	CardsEval poker.CardList     `json:"-"`
+	Cards            poker.CardList     `json:"Cards"`
+	IsFold           bool               `json:"IsFold"`
+	IsAway           bool               `json:"IsAway"`
+	HasActed         bool               `json:"HasActed"`
+	Bank             int                `json:"Bank"`
+	Bet              int                `json:"Bet"`
+	Place            int                `json:"Place"`
+	TimeTurn         int64              `json:"TimeTurn"` // turn time in seconds
+	Name             string             `json:"Name"`
+	User_id          string             `json:"UserId"`
+	SidePots         [8]int             `json:"-"`
+	IsAllIn          bool               `json:"-"`
+	Conn             io.ReadWriteCloser `json:"-"`
+	cache            *bytes.Buffer      `json:"-"`
+	Encoder          json.Encoder       `json:"-"`
+	HiddenCardsCache []byte             `json:"-"`
 }
 
-func (p *PlayUnit) StoreCache() []byte {
+func (p *PlayUnit) StoreCache() {
 	var err error
 
-	p.cache, err = json.Marshal(p)
+	err = p.Encoder.Encode(p)
 	if err != nil {
 		panic("somehow bytedance messed up badly...")
 	}
-	return p.cache
+	HideCards(p.HiddenCardsCache, p.cache.Bytes())
 }
 
 type GameBoard struct {
-	Cards       []string       `json:"Cards"`
+	Cards       poker.CardList `json:"Cards"`
 	Bank        int            `json:"Bank"`
 	MaxBet      int            `json:"MaxBet"`
 	TurnPlace   int            `json:"TurnPlace"`
@@ -53,16 +55,16 @@ type GameBoard struct {
 	Blind       int            `json:"Blind"`
 	Active      bool           `json:"Active"`
 	IsRating    bool           `json:"IsRating"`
-	cache       []byte         `json:"-"`
-	Cardlist    poker.CardList `json:"-"`
-	HiddenCards []string       `json:"-"`
+	cache       *bytes.Buffer  `json:"-"`
+	Encoder     json.Encoder   `json:"-"`
+	CardsEval   poker.CardList `json:"-"`
 }
 
-func (g *GameBoard) StoreCache() []byte {
+func (g *GameBoard) StoreCache() {
 	var err error
-	g.cache, err = json.Marshal(g)
+
+	err = g.Encoder.Encode(g)
 	if err != nil {
-		panic("somehow bytedance/sonic messed up badly...")
+		panic("somehow bytedance messed up badly...")
 	}
-	return g.cache
 }

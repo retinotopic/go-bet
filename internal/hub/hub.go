@@ -12,7 +12,7 @@ import (
 	// "golang.org/x/sync/errgroup"
 
 	"github.com/Nerdmaster/poker"
-	json "github.com/bytedance/sonic"
+	// json "github.com/bytedance/sonic"
 	"github.com/coder/websocket"
 
 	"github.com/retinotopic/go-bet/internal/lobby"
@@ -34,9 +34,8 @@ func NewPump(lenBuffer int) *Hub {
 			lb.Winners = make([]int, 0, 8)         //	 >----- reusable memory for post-river evaluation
 			lb.Losers = make([]int, 0, 8)          //---/
 
-			lb.Board.HiddenCards = make([]string, 5)  // hidden cards that haven't come to the table yet (string)
-			lb.Board.Cardlist = make([]poker.Card, 7) // poker.CardList for evaluating hand
-			lb.Board.Cards = make([]string, 0, 5)     // current cards on table for json sending
+			lb.Board.CardsEval = make(poker.CardList, 7) // poker.CardList for evaluating hand
+			lb.Board.Cards = make(poker.CardList, 0, 5)  // current cards on table for json sending
 
 			lb.Shutdown = make(chan bool, 10)
 			lb.PlayerCh = make(chan lobby.Ctrl)
@@ -55,8 +54,7 @@ func NewPump(lenBuffer int) *Hub {
 			lb.MapUsers.M = make(map[string]int)
 			lb.AllUsers = make([]lobby.PlayUnit, 50)
 			for i := range lb.AllUsers {
-				lb.AllUsers[i].Cards = make([]string, 0, 3)
-				lb.AllUsers[i].CardsEval = make([]poker.Card, 0, 2)
+				lb.AllUsers[i].Cards = make(poker.CardList, 0, 2)
 			}
 
 			return lb

@@ -2,14 +2,11 @@ package lobby
 
 import (
 	"bytes"
-	"context"
 	"io"
 	"sync"
 	"time"
 
 	json "github.com/bytedance/sonic"
-	"github.com/coder/websocket"
-	// "github.com/panjf2000/ants/v2"
 )
 
 const (
@@ -36,12 +33,12 @@ type Lobby struct {
 	SidePots          [][]int
 	Seats             [8]Seats
 	TopPlaces         []Top
-	msgBuf            bytes.Buffer
+	msgBuf            *bytes.Buffer
 
 	// indices of AllUsers slice elements
 	Winners []int
 	Losers  []int
-	Deck    Deck
+	Deck    *Deck
 
 	// current player
 	Pl          int
@@ -105,9 +102,9 @@ func (c *Lobby) HandlePlayer(idx int, wrc io.ReadWriteCloser) {
 	if err != nil {
 		return
 	}
-	readb := make([]byte, 0, 10)
+	ctrl := Ctrl{}
+	readb := make([]byte, 0, 40)
 	for { // listening for actions
-		ctrl := Ctrl{}
 		ctrl.Plr = idx
 		_, err := plr.Conn.Read(readb)
 		if err != nil {
@@ -134,15 +131,14 @@ func (l *Lobby) BroadcastPlayer(idx int, IsExposed bool) {
 	l.MapUsers.Mtx.Unlock()
 
 	l.MapUsers.Mtx.RLock()
-	var isEmpty bool
 	for _, v := range l.MapUsers.M {
 		pl := &l.AllUsers[v]
 		if pl == plr || IsExposed {
-			isEmpty = false
+			go pl.Conn.Write(pl.cache.Bytes())
+			continue
 		} else {
-			isEmpty = true
+			go pl.Conn.Write(pl.HiddenCardsCache)
 		}
-		go pl.Conn.Write(EmptyCards(plr.cache, isEmpty))
 
 	}
 	l.MapUsers.Mtx.RUnlock()
@@ -157,7 +153,7 @@ func (l *Lobby) BroadcastBoard() {
 	l.MapUsers.Mtx.RLock()
 	for _, v := range l.MapUsers.M {
 		pl := l.AllUsers[v]
-		go pl.Conn.Write(l.Board.cache)
+		go pl.Conn.Write(l.Board.cache.Bytes())
 
 	}
 	l.MapUsers.Mtx.RUnlock()
@@ -173,34 +169,24 @@ func (l *Lobby) BroadcastBytes(b []byte) {
 	l.MapUsers.Mtx.RUnlock()
 }
 
-func WriteTimeout(timeout time.Duration, c *websocket.Conn, msg []byte) error {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	return c.Write(ctx, websocket.MessageText, msg)
-}
-func EmptyCards(data []byte, isEmpty bool) (data2 []byte) { // in order to not marshaling twice, but for the cards to be empty
-	if !isEmpty {
-		return data
-	}
-	start := bytes.IndexByte(data, '[')
+func HideCards(dst, src []byte) { // in order to not marshaling twice, but for the cards to be empty
+	copy(dst, src)
+	start := bytes.IndexByte(dst, '[')
 	if start == -1 {
-		return data
+		return
 	}
 	start++
-	end := bytes.IndexByte(data, ']')
+	end := bytes.IndexByte(dst, ']')
 	if end == -1 {
-		return data
+		return
 	}
 	for i := start; i < end; i++ {
-		data[i] = ' '
+		dst[i] = ' '
 	}
-	copy(data, data2)
-	return data2
 }
+
 func (l *Lobby) Exit(idx int) {
 	p := &l.AllUsers[idx]
-	p.ReadBytes = p.ReadBytes[:0]
 	if p.Place == -2 {
 		l.MapUsers.Mtx.Lock()
 		delete(l.MapUsers.M, p.User_id)
@@ -235,22 +221,19 @@ func (l *Lobby) LoadPlayer(userid, name string) (int, bool) {
 }
 func (l *Lobby) LoadCurrentState(idx int) (err error) {
 	plr := &l.AllUsers[idx]
-	isEmpty := true
 	l.MapUsers.Mtx.RLock()
 
 	for i := range l.Players { // load current state of the game
 		plrs := &l.AllUsers[l.Players[i]]
 		if plrs.Place >= 0 {
 			if plrs == plr {
-				isEmpty = false
+				go plrs.Conn.Write(plrs.cache.Bytes())
+				continue
 			}
-
-			go plrs.Conn.Write(EmptyCards(plrs.cache, isEmpty))
-
-			isEmpty = true
+			go plrs.Conn.Write(plrs.HiddenCardsCache)
 		}
 	}
-	go plr.Conn.Write(l.Board.cache)
+	go plr.Conn.Write(l.Board.cache.Bytes())
 	l.MapUsers.Mtx.RUnlock()
 
 	return

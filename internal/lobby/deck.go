@@ -12,8 +12,8 @@ type Deck struct {
 	cards  poker.CardList
 }
 
-func NewDeck(src rand.Source) Deck {
-	var d = Deck{rnd: rand.New(src)}
+func NewDeck(src rand.Source) *Deck {
+	var d = &Deck{rnd: rand.New(src)}
 	d.cards = make(poker.CardList, 52)
 	d.offset = 1
 	var idx = 0
@@ -33,13 +33,12 @@ func (d *Deck) Shuffle() {
 	d.offset = 1
 }
 
-func (d *Deck) Draw(cards poker.CardList, strCards []string) {
+func (d *Deck) Draw(cards poker.CardList) {
 	for i := range cards {
 		if d.offset > len(d.cards) {
 			return
 		}
 		cards[i] = d.cards[len(d.cards)-d.offset]
-		strCards[i] = cards[i].String()
 		d.offset++
 	}
 }

@@ -4,8 +4,6 @@ import (
 	mrand "math/rand/v2"
 	"sort"
 	"time"
-
-	"github.com/Nerdmaster/poker"
 )
 
 type Top struct {
@@ -37,10 +35,10 @@ func (l *Lobby) Game() {
 	stages := 0
 	var now int64
 	var dur time.Duration
+	HiddenCards := l.Board.CardsEval[2:]
 	for {
 		select {
 		case <-l.StartGameCh:
-
 			l.Board.Blind = l.Board.Bank * int(stackShare[l.Blindlvl]) // initial blind
 			l.InitialPlayerBank = l.Board.Bank
 
@@ -119,15 +117,15 @@ func (l *Lobby) Game() {
 							}
 							if AllIn { // if everyone goes "all in" and river has not yet arrived
 								stages = postriver
-								copy(l.Board.Cards, l.Board.HiddenCards)
+								copy(l.Board.Cards, l.Board.CardsEval[2:])
 								l.Board.Deadline = 0
 								l.BroadcastBoard()
 							}
 							switch stages {
 							case flop: // preflop to flop
-								l.Board.Cards = append(l.Board.Cards, l.Board.HiddenCards[:3]...)
+								l.Board.Cards = append(l.Board.Cards, HiddenCards[:3]...)
 							case turn, river: // flop to turn, turn to river
-								l.Board.Cards = append(l.Board.Cards, l.Board.HiddenCards[stages+2])
+								l.Board.Cards = append(l.Board.Cards, HiddenCards[stages+2])
 							case postriver: // postriver evaluation
 								if ok := l.PostRiver(); ok { // if postriver() returns true, then end the current game
 									GAME_LOOP = false
@@ -183,10 +181,10 @@ func (l *Lobby) DealNewHand() {
 
 	l.Board.Cards = l.Board.Cards[:0]
 
-	l.Deck.Draw(l.Board.Cardlist[2:], l.Board.HiddenCards) // fill hidden cards
+	l.Deck.Draw(l.Board.CardsEval) // fill hidden cards
 	for _, idx := range l.Players {
 		v := &l.AllUsers[idx]
-		l.Deck.Draw(v.CardsEval, v.Cards[1:]) // fill players cards
+		l.Deck.Draw(v.Cards[2:]) // fill players cards
 		v.IsFold = false
 		v.HasActed = false
 		v.IsAllIn = false
@@ -225,11 +223,10 @@ func (l *Lobby) CalcWinners() {
 			if i == 0 {
 				maxv1, maxv2 = idx, idx
 			}
-			l.Board.Cardlist[0] = v.CardsEval[0]
-			l.Board.Cardlist[1] = v.CardsEval[1]
+			l.Board.CardsEval[0] = v.Cards[0]
+			l.Board.CardsEval[1] = v.Cards[1]
 
-			eval := l.Board.Cardlist.Evaluate()
-			v.Cards[0] = poker.GetHandRank(eval).String()
+			eval := l.Board.CardsEval.Evaluate()
 			l.TopPlaces = append(l.TopPlaces, Top{Rating: int(eval), Place: idx})
 			if maxv1 < v.Bet {
 				maxv2 = maxv1
