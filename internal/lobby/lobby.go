@@ -23,7 +23,7 @@ type Lobby struct {
 	CheckTimeout *time.Ticker
 	lastResponse time.Time
 	ValidateCh   chan Ctrl
-	Shutdown     chan bool
+	Shutdown     bool
 	Url          uint64
 	MapUsers     mapUsers
 	AllUsers     []PlayUnit
@@ -34,6 +34,7 @@ type Lobby struct {
 	Seats             [8]Seats
 	TopPlaces         []Top
 	msgBuf            *bytes.Buffer
+	MsgCh             chan Ctrl
 
 	// indices of AllUsers slice elements
 	Winners []int
@@ -45,7 +46,7 @@ type Lobby struct {
 	TurnTimer   *time.Timer
 	BlindTimer  *time.Timer
 	StartGameCh chan bool
-	Stop        chan bool
+	Stop        bool
 	BlindRaise  bool
 
 	Players  []int
@@ -76,20 +77,21 @@ type mapUsers struct {
 
 func (l *Lobby) LobbyStart() {
 	go l.Game()
+	l.Shutdown = false
 	l.CheckTimeout.Reset(time.Minute * 3)
 	timeout := time.Minute * 4
 	for {
 		select {
 		case <-l.CheckTimeout.C:
 			if time.Since(l.lastResponse) > timeout {
-				for range 2 {
-					l.Shutdown <- true
-				}
+				l.Shutdown = true
+				return
 			}
-		case <-l.Shutdown:
-			return
+		case ctrl, ok := <-l.MsgCh:
+			if ok {
+				l.BroadcastMsg(ctrl)
+			}
 		}
-
 	}
 }
 
@@ -102,7 +104,7 @@ func (c *Lobby) HandlePlayer(idx int, wrc io.ReadWriteCloser) {
 	if err != nil {
 		return
 	}
-	ctrl := Ctrl{}
+	ctrl := Ctrl{Plr: idx}
 	readb := make([]byte, 0, 40)
 	for { // listening for actions
 		ctrl.Plr = idx
@@ -117,7 +119,7 @@ func (c *Lobby) HandlePlayer(idx int, wrc io.ReadWriteCloser) {
 		c.lastResponse = time.Now()
 		plr.IsAway = false
 		if ctrl.Ctrl == 0 && len(ctrl.Text) != 0 {
-			go c.BroadcastBytes([]byte(`{"Message":"` + ctrl.Text + `","Name":"` + plr.Name + `"}`))
+			c.MsgCh <- ctrl
 			continue
 		}
 		c.PlayerCh <- ctrl
@@ -134,10 +136,10 @@ func (l *Lobby) BroadcastPlayer(idx int, IsExposed bool) {
 	for _, v := range l.MapUsers.M {
 		pl := &l.AllUsers[v]
 		if pl == plr || IsExposed {
-			go pl.Conn.Write(pl.cache.Bytes())
+			go pl.Conn.Write(plr.cache.Bytes())
 			continue
 		} else {
-			go pl.Conn.Write(pl.HiddenCardsCache)
+			go pl.Conn.Write(plr.HiddenCardsCache)
 		}
 
 	}
@@ -159,12 +161,24 @@ func (l *Lobby) BroadcastBoard() {
 	l.MapUsers.Mtx.RUnlock()
 
 }
-func (l *Lobby) BroadcastBytes(b []byte) {
+
+func (l *Lobby) BroadcastMsg(ctrl Ctrl) {
+	if len(ctrl.Text) > 100 {
+		return
+	}
+
+	l.msgBuf.Reset()
+	l.msgBuf.WriteString(`{"Message":"`)
+	l.msgBuf.WriteString(ctrl.Text)
+	l.msgBuf.WriteString(`"Name":"`)
+	l.msgBuf.WriteString(l.AllUsers[ctrl.Plr].Name)
+	l.msgBuf.WriteString(`"}`)
+
 	l.MapUsers.Mtx.RLock()
 	for _, v := range l.MapUsers.M {
 		pl := l.AllUsers[v]
 
-		go pl.Conn.Write(b)
+		go pl.Conn.Write(l.msgBuf.Bytes())
 	}
 	l.MapUsers.Mtx.RUnlock()
 }

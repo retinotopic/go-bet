@@ -37,9 +37,8 @@ func NewPump(lenBuffer int) *Hub {
 			lb.Board.CardsEval = make(poker.CardList, 7) // poker.CardList for evaluating hand
 			lb.Board.Cards = make(poker.CardList, 0, 5)  // current cards on table for json sending
 
-			lb.Shutdown = make(chan bool, 10)
+			lb.MsgCh = make(chan lobby.Ctrl, 8)
 			lb.PlayerCh = make(chan lobby.Ctrl)
-			lb.Stop = make(chan bool, 1)
 			lb.StartGameCh = make(chan bool, 1)
 			lb.ValidateCh = make(chan lobby.Ctrl)
 			lb.PlayerCh = make(chan lobby.Ctrl)

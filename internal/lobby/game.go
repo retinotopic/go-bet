@@ -25,7 +25,9 @@ func (l *Lobby) tillTurnOrBlind() {
 			l.PlayerCh <- Ctrl{Plr: l.Pl}
 		case <-l.BlindTimer.C: // timer for blind raise
 			l.BlindRaise = true
-		case <-l.Stop:
+		}
+		if l.Stop {
+			l.Stop = false
 			return
 		}
 	}
@@ -37,12 +39,17 @@ func (l *Lobby) Game() {
 	var dur time.Duration
 	HiddenCards := l.Board.CardsEval[2:]
 	for {
+		if l.Shutdown {
+			return
+		}
 		select {
+		case ctrl := <-l.PlayerCh: // pre-game board tuning
+			l.Validate(ctrl)
 		case <-l.StartGameCh:
 			l.Board.Blind = l.Board.Bank * int(stackShare[l.Blindlvl]) // initial blind
 			l.InitialPlayerBank = l.Board.Bank
 
-			if l.Seats != [8]Seats{} { // if the game is in ranked mode, shuffle seats for randomness
+			if l.Seats != [8]Seats{} { // if the game is in "ranked" mode, shuffle seats for randomness
 				mrand.Shuffle(8, func(i, j int) {
 					l.Seats[i], l.Seats[j] = l.Seats[j], l.Seats[i]
 				})
@@ -60,9 +67,12 @@ func (l *Lobby) Game() {
 
 			go l.tillTurnOrBlind()
 			defer func() {
-				l.Stop <- true
+				l.Stop = true
 			}()
 			for GAME_LOOP := true; GAME_LOOP; { // MAIN GAME LOOP START
+				if l.Shutdown {
+					return
+				}
 				select {
 				case ctrl, ok := <-l.PlayerCh:
 					if ok && ctrl.Plr == l.Pl {
@@ -140,17 +150,10 @@ func (l *Lobby) Game() {
 						l.TurnTimer.Reset(time.Second * dur)                        //			   /----- notifying the player of the start of his turn
 						l.BroadcastBoard()                                          //------------/
 					}
-				case <-l.Shutdown:
-					return
 				}
 			} // MAIN GAME LOOP END
-		case ctrl := <-l.PlayerCh: // pre-game board tuning
-			l.Validate(ctrl)
-		case <-l.Shutdown:
-			return
 		}
 	}
-
 }
 func (l *Lobby) PostRiver() (gameOver bool) {
 	l.CalcWinners()

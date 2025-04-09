@@ -14,6 +14,7 @@ type Ctrl struct {
 	Ctrl  int    `json:"Ctrl"`
 	Text  string `json:"Text"`
 	Plr   int    `json:"-"` //index of player in AllUsers
+	Type  string `json:"-"`
 }
 
 type PlayUnit struct {
@@ -40,7 +41,7 @@ func (p *PlayUnit) StoreCache() {
 
 	err = p.Encoder.Encode(p)
 	if err != nil {
-		panic("somehow bytedance messed up badly...")
+		panic(err)
 	}
 	HideCards(p.HiddenCardsCache, p.cache.Bytes())
 }
@@ -65,6 +66,6 @@ func (g *GameBoard) StoreCache() {
 
 	err = g.Encoder.Encode(g)
 	if err != nil {
-		panic("somehow bytedance messed up badly...")
+		panic(err)
 	}
 }
