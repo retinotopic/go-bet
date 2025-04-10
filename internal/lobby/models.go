@@ -43,6 +43,9 @@ func (p *PlayUnit) StoreCache() {
 	if err != nil {
 		panic(err)
 	}
+	if len(p.HiddenCardsCache) < p.cache.Len() {
+		p.HiddenCardsCache = make([]byte, p.cache.Len())
+	}
 	HideCards(p.HiddenCardsCache, p.cache.Bytes())
 }
 

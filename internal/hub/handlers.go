@@ -1,14 +1,10 @@
 package hub
 
 import (
-	"hash/maphash"
 	"io"
 	"net/http"
 	"strconv"
-	"time"
-	"unicode"
 
-	"github.com/Nerdmaster/poker"
 	"github.com/coder/websocket"
 	"github.com/retinotopic/go-bet/internal/lobby"
 	"github.com/retinotopic/go-bet/internal/middleware"
@@ -20,65 +16,24 @@ type ReadWriteCloserStruct struct {
 	io.WriteCloser
 }
 
-func (h *Hub) GetInitialData(user_id string, conn *websocket.Conn) (err error) {
+func (h *Hub) FindGameHandler(w http.ResponseWriter, r *http.Request) {
+	userid, username := middleware.GetUser(r.Context())
 
-	if time.Since(h.lastRatingsUpdate) > time.Duration(time.Minute*30) { // update top 100 players every 30 minutes
-		var err error
-		h.ratingsCache, err = h.db.GetRatings(user_id)
-		if err != nil {
-			conn.Close(websocket.StatusInternalError, "db fetch ratings error")
-			return err
-		}
-		h.lastRatingsUpdate = time.Now()
-		err = WriteTimeout(time.Second*5, conn, h.ratingsCache)
-		if err != nil {
-			conn.CloseNow()
-			return err
-		}
-	}
-	return err
-}
-func (h *Hub) FindGame(w http.ResponseWriter, r *http.Request) {
-	user_id, username := middleware.GetUser(r.Context())
-	if !isNumeric(user_id) {
-		http.Error(w, "user not found", http.StatusUnauthorized)
-		return
-	}
 	conn, err := websocket.Accept(w, r, nil)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	err = h.GetInitialData(user_id, conn)
+	wr, err := conn.Writer(r.Context(), websocket.MessageText)
 	if err != nil {
-		return
+		conn.Close(3008, "timeout")
 	}
-	plr, ok := h.players.Load(user_id)
-	if ok && len(plr.URL) != 0 {
-		err = WriteTimeout(time.Second*5, conn, []byte(`{"URL":"`+plr.URL+`"}`))
-		if err != nil {
-			conn.CloseNow()
-		}
-	} else {
-		plr := &awaitingPlayer{User_id: user_id, Name: username, Conn: conn}
-		defer func() {
-			plr.Queued = false
-		}()
-		for {
-			b, err := ReadTimeout(time.Minute*5, conn)
-			if err != nil {
-				conn.CloseNow()
-			}
-			if string(b) == "active" {
-				plr.Queued = true
-				plr.Counter = h.ActivityCounter
-				h.reqPlayers <- plr
-			} else if string(b) == "inactive" {
-				plr.Queued = false
-			}
+	_, rd, err := conn.Reader(r.Context())
+	if err != nil {
+		conn.Close(3008, "timeout")
+	}
+	h.FindGame(userid, username, ReadWriteCloserStruct{rd, wr})
 
-		}
-	}
 }
 func (h *Hub) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 	user_id, name := middleware.GetUser(r.Context())
@@ -88,72 +43,37 @@ func (h *Hub) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
 	lb, ok := h.lobby.Load(wsurl)
-	l := lb.(*lobby.Lobby)
 	if ok {
-		idx, ok := l.LoadPlayer(user_id, name)
-		if !ok {
-			http.Error(w, "room is full", http.StatusBadRequest)
-			return
-		}
-		conn, err := websocket.Accept(w, r, nil)
-		if err != nil {
-			l.Exit(idx)
-			return
-		}
-		wr, err := conn.Writer(r.Context(), websocket.MessageText)
-		if err != nil {
-			l.Exit(idx)
-			conn.Close(3008, "timeout")
-		}
-		_, rd, err := conn.Reader(r.Context())
-		if err != nil {
-			l.Exit(idx)
-			conn.Close(3008, "timeout")
-		}
-		go l.HandlePlayer(idx, ReadWriteCloserStruct{rd, wr})
-	}
-}
-func (h *Hub) CreateLobby(w http.ResponseWriter, r *http.Request) {
-	user_id, name := middleware.GetUser(r.Context())
-
-	lb := &lobby.Lobby{}
-	gm := &lobby.Game{Lobby: lb}
-	cstm := &lobby.CustomImpl{Game: gm}
-	gm.Impl = cstm
-	isSet := false
-	var plr *lobby.PlayUnit
-	h.lobby.Store()
-	for !isSet {
-		hash := new(maphash.Hash).Sum64()
-		h.lobby.SetIf(hash, func(previousVale *lobby.Lobby, previousFound bool) (value *lobby.Lobby, set bool) {
-			if !previousFound {
-				lb.Pr.AllUsers.M = make(map[string]*lobby.PlayUnit)
-				plr = &lobby.PlayUnit{User_id: user_id, Name: name, Place: -2, Cards: make([]string, 0, 3), CardsEval: make([]poker.Card, 0, 2)}
-				lb.Pr.AllUsers.M[user_id] = plr
-				previousVale = lb
-				previousFound = true
-				isSet = true
-				go lb.LobbyStart(gm)
-			} else {
-				previousFound = false
+		l, ok := lb.(*lobby.Lobby)
+		if ok {
+			idx, ok := l.LoadPlayer(user_id, name)
+			if !ok {
+				http.Error(w, "room is full", http.StatusBadRequest)
+				return
 			}
-			return previousVale, previousFound
-		})
-	}
-	var err error
-	plr.Conn, err = websocket.Accept(w, r, nil)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	go lb.HandleConn(plr)
-
-}
-func isNumeric(s string) bool {
-	for _, char := range s {
-		if !unicode.IsDigit(char) {
-			return false
+			conn, err := websocket.Accept(w, r, nil)
+			if err != nil {
+				l.Exit(idx)
+				return
+			}
+			wr, err := conn.Writer(r.Context(), websocket.MessageText)
+			if err != nil {
+				l.Exit(idx)
+				conn.Close(3008, "timeout")
+			}
+			_, rd, err := conn.Reader(r.Context())
+			if err != nil {
+				l.Exit(idx)
+				conn.Close(3008, "timeout")
+			}
+			l.HandlePlayer(idx, ReadWriteCloserStruct{rd, wr})
 		}
 	}
-	return true
+}
+func (h *Hub) CreateLobbyHandler(w http.ResponseWriter, r *http.Request) {
+	lb := h.lobbyPool.Get().(*lobby.Lobby)
+	lb.Validate = lb.ValidateCustom
+	url := h.CreateLobby(lb)
+	r.SetPathValue("roomId", strconv.FormatUint(url, 10))
+	http.Redirect(w, r, r.URL.Path, 301)
 }

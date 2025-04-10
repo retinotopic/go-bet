@@ -22,7 +22,6 @@ type Lobby struct {
 	PlayerCh     chan Ctrl
 	CheckTimeout *time.Ticker
 	lastResponse time.Time
-	ValidateCh   chan Ctrl
 	Shutdown     bool
 	Url          uint64
 	MapUsers     mapUsers
@@ -49,6 +48,7 @@ type Lobby struct {
 	Stop        bool
 	BlindRaise  bool
 
+	wg       sync.WaitGroup
 	Players  []int
 	Idx      int
 	Board    GameBoard
@@ -178,9 +178,15 @@ func (l *Lobby) BroadcastMsg(ctrl Ctrl) {
 	for _, v := range l.MapUsers.M {
 		pl := l.AllUsers[v]
 
-		go pl.Conn.Write(l.msgBuf.Bytes())
+		l.wg.Add(1)
+		go func() {
+			pl.Conn.Write(l.msgBuf.Bytes())
+			l.wg.Done()
+		}()
+
 	}
 	l.MapUsers.Mtx.RUnlock()
+	l.wg.Wait()
 }
 
 func HideCards(dst, src []byte) { // in order to not marshaling twice, but for the cards to be empty
