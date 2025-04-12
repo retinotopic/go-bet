@@ -6,7 +6,7 @@ import (
 
 func (rs *Lobby) Next(offset int) int {
 	pl := &rs.AllUsers[rs.Players[rs.Idx]]
-	for pl.IsAway || pl.IsFold || pl.IsAllIn {
+	for pl.IsAway || pl.IsFold || pl.Bank == 0 {
 		rs.Idx = (rs.Idx + offset) % len(rs.Players)
 	}
 	return rs.Players[rs.Idx]

@@ -29,7 +29,6 @@ type PlayUnit struct {
 	Name             string             `json:"Name"`
 	User_id          string             `json:"UserId"`
 	SidePots         [8]int             `json:"-"`
-	IsAllIn          bool               `json:"-"`
 	Conn             io.ReadWriteCloser `json:"-"`
 	cache            *bytes.Buffer      `json:"-"`
 	Encoder          json.Encoder       `json:"-"`

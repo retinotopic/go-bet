@@ -41,7 +41,7 @@ func (c *Lobby) ValidateCustom(ctrl Ctrl) {
 			c.MapUsers.Mtx.RUnlock()
 			c.Seats = [8]Seats{} // to assert that game is custom
 			c.StartGameCh <- true
-		} else if ctrl.Ctrl < len(ctrl.Text) { // admin approves player at the table
+		} else if ctrl.Ctrl < len([]rune(ctrl.Text)) { // admin approves player at the table
 			c.MapUsers.Mtx.RLock()
 			pl, ok := c.MapUsers.M[ctrl.Text[:ctrl.Ctrl]]
 			// is user exist && if place index isnt out of range && if place is not occupied
@@ -63,14 +63,14 @@ func (c *Lobby) ValidateCustom(ctrl Ctrl) {
 		if err != nil {
 			return
 		}
-		WriteTimeout(time.Second*5, c.AllUsers[c.Admin].Conn, b)
+		c.AllUsers[c.Admin].Conn.Write(b)
 	} else if ctrl.Place == -2 && c.AllUsers[ctrl.Plr].Place >= 0 { // player leaves
 		c.MapUsers.Mtx.RLock()
 		pl, ok := c.MapUsers.M[c.AllUsers[ctrl.Plr].User_id]
 		c.Seats[ctrl.Place].isOccupied = false
 		if ok {
 			c.AllUsers[pl].Place = ctrl.Place
-			c.AllUsers[pl].cache = c.AllUsers[pl].StoreCache()
+			c.AllUsers[pl].StoreCache()
 			c.BroadcastPlayer(ctrl.Plr, true)
 		}
 		c.MapUsers.Mtx.RUnlock()
@@ -82,7 +82,7 @@ func (r *Lobby) PlayerOutCustom(plr []PlayUnit, place int) {
 	for i := range plr {
 		plr[i].Place = -2
 		defer plr[i].StoreCache()
-		go WriteTimeout(time.Second*5, plr[i].Conn, placemsg)
+		plr[i].Conn.Write(placemsg)
 	}
 }
 func isAlphanumeric(s string) bool {

@@ -7,10 +7,10 @@
 	import { onMount } from 'svelte';
 	let socket: WebSocket;
 	let ConnState = $state< 'authorized' | 'unauthorized' | 'connerror'| 'loading' >('loading');
-    let ratings = $state<Ratings[]>([]);
-    let gameState = $state< 'find' | 'waiting' | 'ready' >('find');
-    let counter = $state(0);
-    let gameUrl = $state('');
+  let ratings = $state<Ratings[]>([]);
+  let gameState = $state< 'find' | 'waiting' | 'ready' >('find');
+  let counter = $state(0);
+  let gameUrl = $state('');
 	onMount(() => {
         connectWebSocket();
     });

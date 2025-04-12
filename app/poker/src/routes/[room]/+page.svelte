@@ -89,15 +89,16 @@ function toPlayUnit(data: any): PlayUnit  {
     }
     return playUnit
 }
+let user_id = $state("");
 let room_id = $state($page.params);
 let gameBoard =  $state<GameBoard>(toGameBoard({}));
 let ctrl =  $state<Ctrl>(toCtrl({}));
 let places = $state<PlayUnit[]>(InitPlayers(8));
 let myPlaceId = $state(0);
+
+let required = $state(0);
+let hideSlider = $state(false);
 let timer = $state(0);
-let user_id = $state("");
-let precall = $state(false);
-let precheckfold = $state(false);
 let hasacted = $state(false)
 
 let socket: WebSocket;
@@ -132,8 +133,19 @@ function connectWebSocket() {
         }        
 
         gameBoard = toGameBoard(data);
+        timer = gameBoard.Deadline
+
+        
         if (myPlaceId === gameBoard.TurnPlace) {
-            
+            hasacted = false
+            required = gameBoard.MaxBet - places[myPlaceId].Bet
+            if (required > places[myPlaceId].Bank) {
+                hideSlider = true
+                ctrl.Ctrl = places[myPlaceId].Bank
+            } else {
+                hideSlider = false
+                ctrl.Ctrl = required
+            }
         }    
         
     };
@@ -154,41 +166,26 @@ function connectWebSocket() {
 {/each}
 
 {#if myPlaceId === gameBoard?.TurnPlace && !hasacted }
-
-    {#if (places[myPlaceId].Bank - places[myPlaceId].Bet) > gameBoard.MaxBet}
-        
-    {:else}
-        Call
-    {/if}
-
-    <button onclick={()=>
-        {sendmsg(ctrl);
-        hasacted = true;
-        }}>
-        {#if gameBoard.MaxBet > (places[myPlaceId].Bank - places[myPlaceId].Bet)}
-            Bet
-        {:else}
-            Call
-        {/if}
+    <button onclick={ () => {
+        sendmsg(ctrl);
+        hasacted = true; }}>  
+    	{#if ctrl.Ctrl == places[myPlaceId].Bank}
+    		ALL IN
+    	{:else if ctrl.Ctrl > required}
+    		RAISE
+    	{:else if ctrl.Ctrl == 0}
+    		CHECK
+    	{:else}
+    		CALL
+    	{/if}
     </button>
-
-    <button onclick={()=>
-        {sendmsg(ctrl);
-        hasacted = true;
-        }}>
-
-        {#if gameBoard.MaxBet <= places[myPlaceId].Bet}
-            Check
-        {:else}
-            Fold
-        {/if}
-
+    <button onclick={ () => {
+        ctrl.Ctrl = 0;
+        sendmsg(ctrl);
+        hasacted = true; }}>  
+    		FOLD
     </button>
-        
-    <input type="range" bind:value={ctrl} min=0 max={places[myPlaceId].Bank}> {ctrl} <input>
-{:else}
-    <input type="checkbox" bind:checked={precall}>Call<input>
-    <input type="checkbox" bind:checked={precheckfold}>Check/Fold<input>
+    <input type="range" hidden={hideSlider}  bind:value={ctrl.Ctrl}
+        min={required} max={places[myPlaceId].Bank}>
+    {ctrl}
 {/if}
-    
-

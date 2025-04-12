@@ -93,7 +93,6 @@ func (l *Lobby) Game() {
 							pl.Bank -= ctrl.Ctrl
 						} else if ctrl.Ctrl > 0 {
 							pl.IsAway = false
-							pl.IsAllIn = true
 							pl.Bet = pl.Bank
 							pl.Bank = 0
 						} else {
@@ -190,7 +189,6 @@ func (l *Lobby) DealNewHand() {
 		l.Deck.Draw(v.Cards[2:]) // fill players cards
 		v.IsFold = false
 		v.HasActed = false
-		v.IsAllIn = false
 	}
 	l.Board.DealerPlace = l.NextDealer(l.Board.DealerPlace, 1) // evaluate next dealer place
 
