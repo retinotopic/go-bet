@@ -41,29 +41,22 @@ func (c *Lobby) ValidateCustom(ctrl Ctrl) {
 			c.MapUsers.Mtx.RUnlock()
 			c.Seats = [8]Seats{} // to assert that game is custom
 			c.StartGameCh <- true
-		} else if ctrl.Ctrl < len([]rune(ctrl.Text)) { // admin approves player at the table
-			c.MapUsers.Mtx.RLock()
-			pl, ok := c.MapUsers.M[ctrl.Text[:ctrl.Ctrl]]
-			// is user exist && if place index isnt out of range && if place is not occupied
-			if ok && ctrl.Place >= 0 && ctrl.Place <= 7 && !c.Seats[ctrl.Place].isOccupied {
-				name := ctrl.Text[ctrl.Ctrl:]
-				if isAlphanumeric(name) {
-					c.AllUsers[pl].Name = name
-					c.Seats[ctrl.Place].isOccupied = true
-					c.AllUsers[pl].Place = ctrl.Place
-					c.AllUsers[pl].StoreCache()
-					c.BroadcastPlayer(ctrl.Plr, true)
-				}
+		}
+	} else if ctrl.Ctrl < len([]rune(ctrl.Text)) && ctrl.Ctrl != 0 { // player takes seat
+		c.MapUsers.Mtx.RLock()
+		pl, ok := c.MapUsers.M[ctrl.Text[:ctrl.Ctrl]]
+		// is user exist && if place index isnt out of range && if place is not occupied
+		if ok && ctrl.Place >= 0 && ctrl.Place <= 7 && !c.Seats[ctrl.Place].isOccupied {
+			name := ctrl.Text[ctrl.Ctrl:]
+			if isAlphanumeric(name) {
+				c.AllUsers[pl].Name = name
+				c.Seats[ctrl.Place].isOccupied = true
+				c.AllUsers[pl].Place = ctrl.Place
+				c.AllUsers[pl].StoreCache()
+				c.BroadcastPlayer(ctrl.Plr, true)
 			}
-			c.MapUsers.Mtx.RUnlock()
 		}
-	} else if ctrl.Place >= 0 && ctrl.Place <= 7 {
-		//player's request to be at the table
-		b, err := json.Marshal(ctrl)
-		if err != nil {
-			return
-		}
-		c.AllUsers[c.Admin].Conn.Write(b)
+		c.MapUsers.Mtx.RUnlock()
 	} else if ctrl.Place == -2 && c.AllUsers[ctrl.Plr].Place >= 0 { // player leaves
 		c.MapUsers.Mtx.RLock()
 		pl, ok := c.MapUsers.M[c.AllUsers[ctrl.Plr].User_id]

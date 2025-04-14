@@ -104,7 +104,7 @@ func (c *Lobby) HandlePlayer(idx int, wrc io.ReadWriteCloser) {
 	if err != nil {
 		return
 	}
-	ctrl := Ctrl{Plr: idx}
+	ctrl := Ctrl{Plr: idx, Place: plr.Place}
 	readb := make([]byte, 0, 40)
 	for { // listening for actions
 		ctrl.Plr = idx
@@ -247,10 +247,10 @@ func (l *Lobby) LoadCurrentState(idx int) (err error) {
 		plrs := &l.AllUsers[l.Players[i]]
 		if plrs.Place >= 0 {
 			if plrs == plr {
-				go plrs.Conn.Write(plrs.cache.Bytes())
+				go plr.Conn.Write(plrs.cache.Bytes())
 				continue
 			}
-			go plrs.Conn.Write(plrs.HiddenCardsCache)
+			go plr.Conn.Write(plrs.HiddenCardsCache)
 		}
 	}
 	go plr.Conn.Write(l.Board.cache.Bytes())

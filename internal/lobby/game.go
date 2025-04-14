@@ -46,6 +46,7 @@ func (l *Lobby) Game() {
 		case ctrl := <-l.PlayerCh: // pre-game board tuning
 			l.Validate(ctrl)
 		case <-l.StartGameCh:
+			l.Board.Active = true
 			l.Board.Blind = l.Board.Bank * int(stackShare[l.Blindlvl]) // initial blind
 			l.InitialPlayerBank = l.Board.Bank
 
@@ -151,6 +152,7 @@ func (l *Lobby) Game() {
 					}
 				}
 			} // MAIN GAME LOOP END
+			l.Board.Active = false
 		}
 	}
 }

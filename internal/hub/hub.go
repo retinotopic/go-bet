@@ -141,6 +141,7 @@ func (h *Hub) requests() {
 
 	}
 }
+
 func (h *Hub) CreateLobby(lb *lobby.Lobby) uint64 {
 	loaded := true
 	var hash uint64
@@ -150,6 +151,7 @@ func (h *Hub) CreateLobby(lb *lobby.Lobby) uint64 {
 	}
 	return hash
 }
+
 func (h *Hub) startRatingGame(plrs []*awaitingPlayer) {
 	lb := h.lobbyPool.Get().(*lobby.Lobby)
 	lb.Validate = lb.ValidateRating

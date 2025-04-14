@@ -53,6 +53,7 @@ type GameBoard struct {
 	Bank        int            `json:"Bank"`
 	MaxBet      int            `json:"MaxBet"`
 	TurnPlace   int            `json:"TurnPlace"`
+	AdminPlace  int            `json:"AdminPlace"`
 	DealerPlace int            `json:"DealerPlace"`
 	Deadline    int64          `json:"Deadline"`
 	Blind       int            `json:"Blind"`
