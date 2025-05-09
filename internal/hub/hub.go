@@ -10,10 +10,7 @@ import (
 	"sync"
 	"time"
 
-	// "golang.org/x/sync/errgroup"
-
 	"github.com/Nerdmaster/poker"
-	// json "github.com/bytedance/sonic"
 
 	"github.com/retinotopic/go-bet/internal/lobby"
 )
@@ -206,7 +203,6 @@ func (h *Hub) FindGame(userid string, username string, wrc io.ReadWriteCloser) {
 					} else if string(plr.ReadB[:n]) == "inactive" {
 						plr.Queued = false
 					}
-
 				}
 			}
 		}

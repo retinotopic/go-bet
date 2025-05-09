@@ -1,76 +1,58 @@
 
 <script lang="ts">
-    interface Ratings {
-        username: string ;
-        rating: string ;
-    }
 	import { onMount } from 'svelte';
 	let socket: WebSocket;
-	let ConnState = $state< 'authorized' | 'unauthorized' | 'connerror'| 'loading' >('loading');
-  let ratings = $state<Ratings[]>([]);
+	let ConnState = $state< 'connected' | 'connerror'| 'loading' >('loading');
   let gameState = $state< 'find' | 'waiting' | 'ready' >('find');
   let counter = $state(0);
   let gameUrl = $state('');
-	onMount(() => {
-        connectWebSocket();
-    });
 
-    function sendmsg(msg :string) {
+	onMount(() => {
+  	connectWebSocket();
+  });
+
+  function sendmsg(msg :string) {
 		socket.send(msg)
+  };
+
+	function connectWebSocket() {
+    socket = new WebSocket('ws://localhost:8080/hub');
+    ConnState = 'loading'
+    socket.onerror = () => {
+        ConnState = 'connerror';
     };
-    function connectWebSocket() {
-        socket = new WebSocket('ws://localhost:8080/hub');
-        ConnState = 'loading'
-        socket.onerror = () => {
-            ConnState = 'connerror';
-        };
 
 		socket.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            if (!data) {
-                ConnState = 'connerror';
-                return
-            }
-            
-            if (data[0] && data[0].rating && data[0].username) {
-                ratings = data as Ratings[];
-            } 
-
-			let num = parseInt(data.user_id, 10)
-			if (!num){
-				ConnState = 'unauthorized';
-				return;
-			}
-			ConnState = 'authorized';
-
+	    const data = JSON.parse(event.data);
+	    if (!data) {
+	        ConnState = 'connerror';
+	        return
+	    }
+      ConnState = 'connected';
 
 			if (data.url){
 				gameUrl = data.url
 			}
 
-			num = parseInt(data.counter, 10)
+			let num = parseInt(data.counter, 10)
 			if (num){
 				counter = num
 			}
 
-
 			if (gameUrl) {
 				gameState = 'ready';
-                counter = 0
-                socket.close()
+	      counter = 0
+	      socket.close()
 			} else if (counter === -1) {
 				gameState = 'find';
 			} else {
 				gameState = 'waiting';
-			}
-            
-    };
-    }
-
-
+			}          
+	  };
+  }
 </script>
 
-{#if ConnState === 'authorized'}
+{#if ConnState === 'connected'}
 	<div class="hub-container">
 		<div class="game-section">
 			{#if gameState === 'find'}
@@ -87,19 +69,6 @@
 			{/if}
 		</div>
 
-		<div class="ratings-section">
-			<h3>Ratings</h3>
-			<ul>
-				{#each ratings as {username, rating}}
-					<li>{username} - {rating}</li>
-				{/each}
-			</ul>
-		</div>
-	</div>
-{:else if ConnState === 'unauthorized'}
-	<div class="connection-error">
-		<p>Login with google</p>
-		<a href="URL">LOGIN</a>
 	</div>
 {:else if ConnState === 'connerror'}
     {connectWebSocket}
@@ -115,10 +84,6 @@
 
     .game-section {
         flex: 1;
-    }
-
-    .ratings-section {
-        width: 300px;
     }
 
     .circles {
@@ -155,13 +120,4 @@
         border-radius: 4px;
     }
 
-    .ratings-section ul {
-        list-style: none;
-        padding: 0;
-    }
-
-    .ratings-section li {
-        padding: 0.5rem 0;
-        border-bottom: 1px solid #eee;
-    }
 </style>

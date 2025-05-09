@@ -2,11 +2,7 @@ package lobby
 
 import (
 	"strconv"
-	// "sync"
-	"time"
 	"unicode"
-
-	json "github.com/bytedance/sonic"
 )
 
 func (c *Lobby) ValidateCustom(ctrl Ctrl) {
@@ -69,14 +65,6 @@ func (c *Lobby) ValidateCustom(ctrl Ctrl) {
 		c.MapUsers.Mtx.RUnlock()
 	}
 
-}
-func (r *Lobby) PlayerOutCustom(plr []PlayUnit, place int) {
-	placemsg := []byte(`{"GameOverPlace":"` + strconv.Itoa(place) + `"}`)
-	for i := range plr {
-		plr[i].Place = -2
-		defer plr[i].StoreCache()
-		plr[i].Conn.Write(placemsg)
-	}
 }
 func isAlphanumeric(s string) bool {
 	for _, char := range s {

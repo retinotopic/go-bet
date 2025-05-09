@@ -1,64 +1,33 @@
 package router
 
 import (
-	"context"
 	"net/http"
-	"os"
 
-	"github.com/jackc/pgx/v5/stdlib"
-	"github.com/pressly/goose/v3"
 	"github.com/retinotopic/go-bet/internal/auth"
-	"github.com/retinotopic/go-bet/internal/db"
 	"github.com/retinotopic/go-bet/internal/hub"
 	"github.com/retinotopic/go-bet/internal/middleware"
-	"github.com/retinotopic/go-bet/internal/queue"
 )
 
 type Router struct {
-	Addr        string
-	AddrQueue   string
-	RoutingKey  string
-	ConfigQueue queue.Config
-	Auth        auth.ProviderMap
+	Addr       string
+	RoutingKey string
 }
 
-func NewRouter(addr string, addrQueue string, config queue.Config, mp auth.ProviderMap) *Router {
-	return &Router{Addr: addr, AddrQueue: addrQueue, ConfigQueue: config, Auth: mp}
+func NewRouter(addr string) *Router {
+	return &Router{Addr: addr}
 }
 func (r *Router) Run() error {
 
-	db, err := db.NewPool(context.Background(), os.Getenv("DATABASE_URL"))
-	if err != nil {
-		return err
-	}
-	sqldb := stdlib.OpenDBFromPool(db.Pool)
-	if err := goose.SetDialect("postgres"); err != nil {
-		return err
-	}
-	if err := goose.Up(sqldb, "migrations"); err != nil {
-		return err
-	}
-	if err := sqldb.Close(); err != nil {
-		return err
-	}
-	producer := &queue.Producer{Addr: r.AddrQueue, Ex: r.ConfigQueue.Exchange, RoutingKey: r.RoutingKey}
-	producer.TryConnect()
-
-	hub := hub.NewPump(1250, producer)
-	consumer := &queue.Consumer{Addr: r.AddrQueue, Ex: r.ConfigQueue.Exchange, RoutingKey: r.RoutingKey}
-	consumer.TryConnect()
-
-	middleware := middleware.UserMiddleware{GetUser: db.GetUser, GetSubject: r.Auth.GetSubject, WriteCookie: auth.WriteCookie, ReadCookie: auth.ReadCookie}
+	hub := hub.NewHub(100)
+	middleware := middleware.UserMiddleware{WriteCookie: auth.WriteCookie, ReadCookie: auth.ReadCookie}
 	hConnectLobby := http.HandlerFunc(hub.ConnectLobby)
-	hFindGame := http.HandlerFunc(hub.FindGame)
+	hFindGame := http.HandlerFunc(hub.FindGameHandler)
 
 	mux := http.NewServeMux()
-	mux.Handle("/lobby", middleware.FetchUser(hConnectLobby))
+	mux.Handle("/lobby/{roomId}", middleware.FetchUser(hConnectLobby))
 	mux.Handle("/findgame", middleware.FetchUser(hFindGame))
-	mux.HandleFunc("/beginauth", r.Auth.BeginAuth)
-	mux.HandleFunc("/completeauth", r.Auth.CompleteAuth)
 
-	err = http.ListenAndServe(r.Addr, mux)
+	err := http.ListenAndServe(r.Addr, mux)
 	if err != nil {
 		return err
 	}

@@ -37,7 +37,6 @@ func (h *Hub) FindGameHandler(w http.ResponseWriter, r *http.Request) {
 }
 func (h *Hub) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 	user_id, name := middleware.GetUser(r.Context())
-
 	wsurl, err := strconv.ParseUint(r.PathValue("roomId"), 10, 0)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -71,9 +70,11 @@ func (h *Hub) ConnectLobby(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func (h *Hub) CreateLobbyHandler(w http.ResponseWriter, r *http.Request) {
-	lb := h.lobbyPool.Get().(*lobby.Lobby)
-	lb.Validate = lb.ValidateCustom
-	url := h.CreateLobby(lb)
-	r.SetPathValue("roomId", strconv.FormatUint(url, 10))
-	http.Redirect(w, r, r.URL.Path, 301)
+	lb, ok := h.lobbyPool.Get().(*lobby.Lobby)
+	if ok {
+		lb.Validate = lb.ValidateCustom
+		url := h.CreateLobby(lb)
+		r.SetPathValue("roomId", strconv.FormatUint(url, 10))
+		http.Redirect(w, r, r.URL.Path, 301)
+	}
 }

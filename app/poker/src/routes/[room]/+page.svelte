@@ -114,7 +114,7 @@ function sendmsg(c: Ctrl) {
     socket.send(JSON.stringify(c))
 }
 function connectWebSocket() {
-    socket = new WebSocket('ws://localhost:8080/lobby'+roomId)
+    socket = new WebSocket('ws://localhost:8080/lobby/'+roomId)
 
     socket.onclose = () => {
 

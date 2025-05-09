@@ -168,12 +168,12 @@ func (l *Lobby) PostRiver() (gameOver bool) {
 			l.Losers = append(l.Losers, idx)
 		}
 	}
-	go l.PlayerOut(l.Losers, len(l.Players))
+	go l.PlayerOut(l.Losers, len(l.Players), false)
 	l.Players = l.Players[:(len(l.Winners))]
 	copy(l.Players, l.Winners)
 	l.Idx -= len(l.Losers)
 	if len(l.Winners) == 1 {
-		l.PlayerOut(l.Winners, 1)
+		l.PlayerOut(l.Winners, 1, true)
 		return true
 	}
 	l.DealNewHand()

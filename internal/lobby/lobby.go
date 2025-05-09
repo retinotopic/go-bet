@@ -57,17 +57,9 @@ type Lobby struct {
 	// method for handling board in no-ingame time
 	Validate func(Ctrl)
 
-	// method for handling kicked players
-	PlayerOut func([]int, int)
-
 	//for custom lobbies
 	AdminOnce sync.Once
 	Admin     int
-
-	/*For rating lobbies, basically a queue,
-	for some minimal persistence writes on disk if
-	update not succeded */
-	UpdateRating func(int, int) // user id, rating
 }
 
 type mapUsers struct {
@@ -108,11 +100,11 @@ func (c *Lobby) HandlePlayer(idx int, wrc io.ReadWriteCloser) {
 	readb := make([]byte, 0, 40)
 	for { // listening for actions
 		ctrl.Plr = idx
-		_, err := plr.Conn.Read(readb)
+		n, err := plr.Conn.Read(readb)
 		if err != nil {
 			break
 		}
-		err = json.Unmarshal(readb, &ctrl)
+		err = json.Unmarshal(readb[:n], &ctrl)
 		if err != nil {
 			break
 		}

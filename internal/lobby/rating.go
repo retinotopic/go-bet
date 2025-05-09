@@ -1,7 +1,6 @@
 package lobby
 
 import (
-	"math"
 	"strconv"
 	"time"
 )
@@ -18,26 +17,14 @@ func (l *Lobby) ValidateRating(ctrl Ctrl) {
 		return
 	}
 }
-func (l *Lobby) PlayerOutRating(plr []PlayUnit, place int) {
-	baseChange := 30
+func (l *Lobby) PlayerOut(plr []int, place int, shutdown bool) {
 	placemsg := []byte(`{"GameOverPlace":"` + strconv.Itoa(place) + `"}`)
-	middlePlace := float64(len(l.Players)+1) / 2
 	for i := range plr {
-		rating := int(math.Round(float64(baseChange) * (middlePlace - float64(place)) / (middlePlace - 1)))
-		userid, err := strconv.Atoi(plr[i].User_id)
-		if err != nil {
-			return
-		}
-		l.UpdateRating(userid, rating)
-		plr[i].Place = -2
-		defer plr[i].StoreCache()
-
-		go WriteTimeout(time.Second*5, plr[i].Conn, placemsg)
-
+		l.AllUsers[plr[i]].Place = -2
+		defer l.AllUsers[plr[i]].StoreCache()
+		l.AllUsers[plr[i]].Conn.Write(placemsg)
 	}
-	if place == 1 {
-		for range 3 {
-			l.Shutdown <- true
-		}
+	if shutdown {
+		l.Shutdown = true
 	}
 }
